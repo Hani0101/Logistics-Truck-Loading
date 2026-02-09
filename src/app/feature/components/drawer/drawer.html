@@ -1,0 +1,53 @@
+<div class="card flex justify-center wrapper">
+  <p-drawer [(visible)]="createTruck" header="Truck Details">
+    <div class="flex forms-wrapper">
+      <p-floatlabel>
+        <p-autocomplete [(ngModel)]="value1" inputId="over_label" />
+        <label for="over_label">Truck Width (mm)</label>
+        <input type="number" pInputText />
+      </p-floatlabel>
+      <p-floatlabel>
+        <p-autocomplete [(ngModel)]="value1" inputId="over_label" />
+        <label for="over_label">Truck length (mm)</label>
+        <input type="number" pInputText />
+      </p-floatlabel>
+      <p-floatlabel>
+        <p-autocomplete [(ngModel)]="value1" inputId="over_label" />
+        <label for="over_label">Truck Height (mm)</label>
+        <input type="number" pInputText />
+      </p-floatlabel>
+    </div>
+  </p-drawer>
+  <p-button (click)="createTruck = true" icon="pi pi-truck" />
+
+  <p-drawer [(visible)]="visible" header="Container Details">
+    <div class="flex forms-wrapper">
+      <p-floatlabel>
+        <p-autocomplete [(ngModel)]="value1" inputId="over_label" />
+        <label for="over_label">Container Width (mm)</label>
+        <input type="number" pInputText />
+      </p-floatlabel>
+      <p-floatlabel>
+        <p-autocomplete [(ngModel)]="value1" inputId="over_label" />
+        <label for="over_label">Container length (mm)</label>
+        <input type="number" pInputText />
+      </p-floatlabel>
+      <p-floatlabel>
+        <p-autocomplete [(ngModel)]="value1" inputId="over_label" />
+        <label for="over_label">Container Height (mm)</label>
+        <input type="number" pInputText />
+      </p-floatlabel>
+      <p-floatlabel>
+        <p-autocomplete [(ngModel)]="value1" inputId="over_label" />
+        <label for="over_label">Container Weight (g)</label>
+        <input type="number" pInputText />
+      </p-floatlabel>
+      <p-floatlabel>
+        <p-autocomplete [(ngModel)]="value1" inputId="over_label" />
+        <label for="over_label">Amount</label>
+        <input type="number" pInputText />
+      </p-floatlabel>
+    </div>
+  </p-drawer>
+  <p-button (click)="visible = true" icon="pi pi-warehouse" />
+</div>
