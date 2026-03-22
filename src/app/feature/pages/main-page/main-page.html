@@ -1,1 +1,13 @@
-<app-drawer></app-drawer>
+<div class="main-page-container">
+  <div class="controls-section">
+    <app-drawer
+      (truckDimensionsChanged)="onTruckDimensionsChanged($event)"
+      (containerAdded)="onContainerAdded($event)">
+    </app-drawer>
+  </div>
+  <div class="visualization-section">
+    <app-3d-view
+      [truckDimensions]="currentTruckDimensions">
+    </app-3d-view>
+  </div>
+</div>

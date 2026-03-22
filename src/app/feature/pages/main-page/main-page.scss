@@ -1,0 +1,55 @@
+.main-page-container {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  gap: 1rem;
+  padding: 1rem;
+  box-sizing: border-box;
+  background-color: #f8f9fa;
+}
+
+.controls-section {
+  position: relative;
+  z-index: 1200;
+
+  // Ensure the drawer buttons are visible and accessible
+  .wrapper {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+}
+
+.visualization-section {
+  flex: 1;
+  min-height: 0; // Important for flex child to shrink
+  display: flex;
+  flex-direction: column;
+}
+
+// Responsive design
+@media (max-width: 768px) {
+  .main-page-container {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .controls-section {
+    order: 1;
+    flex-shrink: 0;
+  }
+
+  .visualization-section {
+    order: 2;
+    flex: 1;
+    min-height: 400px;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-page-container {
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
+}
