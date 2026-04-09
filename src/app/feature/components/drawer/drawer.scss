@@ -1,0 +1,37 @@
+@use 'variables' as *;
+
+.drawer-triggers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 0.5rem 0;
+}
+
+.color-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.color-label {
+  font-size: 0.78rem;
+  color: $text-muted;
+}
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.color-hex {
+  font-family: $font-mono;
+  font-size: 0.8rem;
+  color: $text-muted;
+}

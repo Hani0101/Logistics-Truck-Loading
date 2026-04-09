@@ -1,0 +1,87 @@
+<div class="drawer-triggers">
+  <p-button
+    (click)="createTruck = true"
+    icon="pi pi-truck"
+    label="Truck"
+    [outlined]="true"
+    [fluid]="true">
+  </p-button>
+
+  <p-button
+    (click)="visible = true"
+    icon="pi pi-warehouse"
+    label="Container"
+    [outlined]="true"
+    [fluid]="true">
+  </p-button>
+</div>
+
+<!-- Truck Drawer -->
+<p-drawer [(visible)]="createTruck" header="Truck Setup" position="left">
+  <div class="form-fields">
+    <p-floatlabel>
+      <input type="number" pInputText id="truck_width" [(ngModel)]="truckDimensions.width" />
+      <label for="truck_width">Width (mm)</label>
+    </p-floatlabel>
+    <p-floatlabel>
+      <input type="number" pInputText id="truck_length" [(ngModel)]="truckDimensions.length" />
+      <label for="truck_length">Length (mm)</label>
+    </p-floatlabel>
+    <p-floatlabel>
+      <input type="number" pInputText id="truck_height" [(ngModel)]="truckDimensions.height" />
+      <label for="truck_height">Height (mm)</label>
+    </p-floatlabel>
+  </div>
+
+  <ng-template pTemplate="footer">
+    <p-button
+      (click)="updateTruck()"
+      label="Update Truck"
+      icon="pi pi-refresh"
+      [fluid]="true">
+    </p-button>
+  </ng-template>
+</p-drawer>
+
+<!-- Container Drawer -->
+<p-drawer [(visible)]="visible" header="Add Container" position="left">
+  <div class="form-fields">
+    <p-floatlabel>
+      <input type="number" pInputText id="container_width" [(ngModel)]="containerDetails.width" />
+      <label for="container_width">Width (mm)</label>
+    </p-floatlabel>
+    <p-floatlabel>
+      <input type="number" pInputText id="container_length" [(ngModel)]="containerDetails.length" />
+      <label for="container_length">Length (mm)</label>
+    </p-floatlabel>
+    <p-floatlabel>
+      <input type="number" pInputText id="container_height" [(ngModel)]="containerDetails.height" />
+      <label for="container_height">Height (mm)</label>
+    </p-floatlabel>
+    <p-floatlabel>
+      <input type="number" pInputText id="container_weight" [(ngModel)]="containerDetails.weight" />
+      <label for="container_weight">Weight (g)</label>
+    </p-floatlabel>
+    <p-floatlabel>
+      <input type="number" pInputText id="container_amount" [(ngModel)]="containerDetails.amount" />
+      <label for="container_amount">Amount</label>
+    </p-floatlabel>
+
+    <div class="color-field">
+      <span class="color-label">Color</span>
+      <div class="color-row">
+        <p-colorpicker [(ngModel)]="containerDetails.color" format="hex"></p-colorpicker>
+        <span class="color-hex">#{{ containerDetails.color }}</span>
+      </div>
+    </div>
+  </div>
+
+  <ng-template pTemplate="footer">
+    <p-button
+      (click)="addContainer()"
+      label="Add Container"
+      icon="pi pi-plus"
+      [fluid]="true">
+    </p-button>
+  </ng-template>
+</p-drawer>

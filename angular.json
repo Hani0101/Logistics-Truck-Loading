@@ -2,8 +2,9 @@
   "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
   "version": 1,
   "cli": {
-    "packageManager": "npm"
-  },
+    "packageManager": "npm",
+    "analytics": false
+    },
   "newProjectRoot": "projects",
   "projects": {
     "Logistics-Truck-Loading": {
@@ -32,6 +33,9 @@
             "styles": [
               "src/styles.scss"
             ],
+            "stylePreprocessorOptions": {
+              "includePaths": ["src/styles"]
+            },
             "server": "src/main.server.ts",
             "outputMode": "server",
             "ssr": {

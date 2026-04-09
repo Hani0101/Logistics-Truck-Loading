@@ -1,0 +1,39 @@
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <i class="pi pi-box"></i>
+      <div>
+        <p class="app-name">Truck Loading</p>
+        <p class="app-sub">3D Truck Optimizer</p>
+      </div>
+    </div>
+
+    <div class="sidebar-body">
+      <app-drawer
+        (truckDimensionsChanged)="onTruckDimensionsChanged($event)"
+        (containerAdded)="onContainerAdded($event)">
+      </app-drawer>
+    </div>
+
+    <div class="sidebar-footer">
+      <p-button
+        (click)="runOptimization()"
+        label="Run Optimization"
+        icon="pi pi-play"
+        [fluid]="true">
+      </p-button>
+    </div>
+  </aside>
+
+  <main class="viewport">
+    <div class="viewport-bar">
+      <span>3D Viewport</span>
+      <span class="hint">Scroll to zoom · Drag to orbit</span>
+    </div>
+    <div class="viewport-canvas">
+      <app-3d-view [truckDimensions]="currentTruckDimensions" defer></app-3d-view>
+    </div>
+  </main>
+
+</div>
