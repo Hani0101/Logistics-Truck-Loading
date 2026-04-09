@@ -1,13 +1,7 @@
-import { Injectable, ElementRef } from '@angular/core';
+import {Injectable, ElementRef, inject} from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-
-export interface TruckDimensions {
-  width: number;
-  length: number;
-  height: number;
-}
-
+import { TruckDimensions } from '../../shared/models/truck.models';
 @Injectable({
   providedIn: 'root'
 })
@@ -29,7 +23,7 @@ export class Truck3DService {
     // Create camera
     this.camera = new THREE.PerspectiveCamera(
       75,
-      container.nativeElement.clientWidth / container.nativeElement.clientHeight,
+      (container.nativeElement.clientWidth / container.nativeElement.clientHeight),
       0.1,
       1000
     );
@@ -95,24 +89,26 @@ export class Truck3DService {
     const wireframeMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
 
     // Create truck cabin wireframe
-    const cabinGeometry = new THREE.BoxGeometry(width * 0.3, height * 0.8, width * 0.9);
+    const cabinGeometry = new THREE.BoxGeometry(width * 0.34, height * 0.8, width * 0.9);
     const cabinEdges = new THREE.EdgesGeometry(cabinGeometry);
-    const cabinWireframe = new THREE.LineSegments(cabinEdges, wireframeMaterial);
-    cabinWireframe.position.set(-length * 0.35, height * 0.4, 0);
-    this.truck.add(cabinWireframe);
+    // const cabinWireframe = new THREE.LineSegments(cabinEdges, wireframeMaterial);
+    // cabinWireframe.position.set(-length * 0.35, height * 0.4, 0);
+    // this.truck.add(cabinWireframe);
 
     // Create truck cargo area wireframe
-    const cargoGeometry = new THREE.BoxGeometry(length * 0.7, height * 0.9, width);
+    // const cargoGeometry = new THREE.BoxGeometry(length * 0.7, height * 0.9, width);
+    const cargoGeometry = new THREE.BoxGeometry(width, height * 0.9, length * 0.7);
     const cargoEdges = new THREE.EdgesGeometry(cargoGeometry);
     const cargoWireframe = new THREE.LineSegments(cargoEdges, wireframeMaterial);
-    cargoWireframe.position.set(length * 0.15, height * 0.45, 0);
+    // cargoWireframe.position.set(length * 0.15, height * 0.45, 0);
+    cargoWireframe.position.set(0, height * 0.45, 0);
     this.truck.add(cargoWireframe);
 
     // Add truck to scene
     this.scene.add(this.truck);
 
     // Adjust camera position based on truck size
-    this.adjustCameraPosition(width, length, height);
+    this.adjustCameraPosition(width, length - 100, height);
   }
 
 
@@ -148,5 +144,25 @@ export class Truck3DService {
     if (this.renderer) {
       this.renderer.dispose();
     }
+  }
+
+  getScene(): THREE.Scene {
+    return this.scene;
+  }
+
+  getCamera(): THREE.PerspectiveCamera {
+    return this.camera;
+  }
+
+  getRenderer(): THREE.WebGLRenderer {
+    return this.renderer;
+  }
+
+  disableControls(): void {
+    this.controls.enabled = false;
+  }
+
+  enableControls(): void {
+    this.controls.enabled = true;
   }
 }

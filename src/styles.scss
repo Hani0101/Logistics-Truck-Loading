@@ -1,7 +1,10 @@
+@use 'variables' as *;
 @import '../node_modules/primeicons/primeicons.css';
-@import 'primeflex/primeflex.scss';
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap');
 
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
 .p-drawer-content {
     overflow: visible !important;
 }
+
