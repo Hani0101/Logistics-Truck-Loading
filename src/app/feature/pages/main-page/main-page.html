@@ -1,3 +1,5 @@
+<p-toast position="bottom-right" />
+
 <div class="layout">
 
   <aside class="sidebar">
@@ -12,27 +14,53 @@
     <div class="sidebar-body">
       <app-drawer
         (truckDimensionsChanged)="onTruckDimensionsChanged($event)"
-        (containerAdded)="onContainerAdded($event)">
+        (containerAdded)="onContainerAdded($event)"
+        (layoutSaved)="onLayoutSaved($event)"
+        (layoutLoadRequested)="onLayoutLoadRequested($event)"
+        (layoutDeleted)="onLayoutDeleted()">
       </app-drawer>
     </div>
 
     <div class="sidebar-footer">
+
+      <!-- Save current 3-D positions back to the API -->
+      <p-button
+        (click)="saveCurrentScene()"
+        label="Save Scene"
+        icon="pi pi-cloud-upload"
+        [fluid]="true"
+        severity="secondary"
+        [outlined]="true"
+        [loading]="isSavingContainers"
+        styleClass="mb-2">
+      </p-button>
+
+      <!-- Run optimization -->
       <p-button
         (click)="runOptimization()"
         label="Run Optimization"
         icon="pi pi-play"
-        [fluid]="true">
+        [fluid]="true"
+        [loading]="isOptimizing">
       </p-button>
+
     </div>
   </aside>
 
   <main class="viewport">
     <div class="viewport-bar">
       <span>3D Viewport</span>
-      <span class="hint">Scroll to zoom · Drag to orbit</span>
+      <div class="viewport-bar-right">
+        @if (currentLayoutId) {
+          <span class="layout-id-badge">
+            <i class="pi pi-link"></i> layout synced
+          </span>
+        }
+        <span class="hint">Scroll to zoom · Drag to orbit</span>
+      </div>
     </div>
     <div class="viewport-canvas">
-      <app-3d-view [truckDimensions]="currentTruckDimensions" defer></app-3d-view>
+      <app-3d-view [truckDimensions]="currentTruckDimensions"></app-3d-view>
     </div>
   </main>
 
