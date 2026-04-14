@@ -24,16 +24,13 @@
   padding: 1rem;
   border-bottom: 1px solid $border-color;
 
-  i {
-    font-size: 1.2rem;
-  }
+  i { font-size: 1.2rem; }
 
   .app-name {
     font-size: 0.9rem;
     font-weight: 600;
     color: $text-primary;
   }
-
   .app-sub {
     font-size: 0.7rem;
     color: $text-muted;
@@ -50,6 +47,9 @@
 .sidebar-footer {
   padding: 1rem;
   border-top: 1px solid $border-color;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .viewport {
@@ -67,11 +67,32 @@
   border-bottom: 1px solid $border-color;
   font-size: 0.75rem;
   color: $text-muted;
+}
 
-  .hint {
-    font-family: $font-mono;
-    font-size: 0.7rem;
-  }
+.viewport-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.layout-id-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: $font-mono;
+  font-size: 0.68rem;
+  color: $accent;
+  background: rgba($accent, 0.08);
+  border: 1px solid rgba($accent, 0.2);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+
+  i { font-size: 0.65rem; }
+}
+
+.hint {
+  font-family: $font-mono;
+  font-size: 0.7rem;
 }
 
 .viewport-canvas {

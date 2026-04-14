@@ -1,68 +1,53 @@
-import { Component, ElementRef, ViewChild, OnInit, OnDestroy, AfterViewInit, Input, OnChanges, SimpleChanges, HostListener, inject } from '@angular/core';
-import { Truck3DService } from '../../services/truck-3d.service';
-import { TruckDimensions } from '../../../shared/models/truck.models';
-import { Container3DService } from '../../services/container-3d.service';
+import {
+  Component, ElementRef, ViewChild, AfterViewInit,
+  OnDestroy, OnChanges, Input, SimpleChanges, HostListener, inject,
+} from '@angular/core';
 import * as THREE from 'three';
-import {Container} from '../../../shared/models/container.models';
+import { Truck3DService } from '../../services/truck-3d.service';
+import { Container3DService } from '../../services/container-3d.service';
+import { TruckDimensions } from '../../../shared/models/truck.models';
+import { Container } from '../../../shared/models/container.models';
 
 @Component({
   selector: 'app-3d-view',
+  standalone: true,
   imports: [],
   templateUrl: './3d-view.html',
   styleUrls: ['./3d-view.scss'],
 })
-export class ThreeDView implements OnInit, AfterViewInit, OnDestroy, OnChanges {
-  private truck3DService = inject(Truck3DService);
-  private container3DService = inject(Container3DService);
-  @ViewChild('threeDContainer', { static: false }) threeDContainer!: ElementRef;
+export class ThreeDView implements AfterViewInit, OnDestroy, OnChanges {
+  @ViewChild('threeDContainer', { static: false }) threeDContainer!: ElementRef<HTMLElement>;
   @Input() truckDimensions?: TruckDimensions;
 
-  private raycaster = new THREE.Raycaster();
-  private mouse = new THREE.Vector2();
   isLoading = true;
 
-  constructor(
-  ) {}
+  private truck3DService = inject(Truck3DService);
+  private container3DService = inject(Container3DService);
+  private raycaster = new THREE.Raycaster();
+  private mouse = new THREE.Vector2();
 
-  ngOnInit(): void {}
+  private readonly defaultDimensions: TruckDimensions = { width: 2500, length: 12000, height: 4000 };
 
   ngAfterViewInit(): void {
-    if(this.threeDContainer) {
-      // Defer heavy initialization to improve LCP
-      requestAnimationFrame(() => {
-        this.truck3DService.initializeScene(this.threeDContainer);
+    if (!this.threeDContainer) return;
 
-        // Initialize container service
-        this.container3DService.initialize(
-          this.truck3DService.getScene(),
-          this.truck3DService.getCamera(),
-          this.truckDimensions || {
-            width: 2500,
-            length: 12000,
-            height: 4000
-          }
-        );
-
-        this.createTruckWithCurrentDimensions();
-        this.isLoading = false;
-      });
-    }
+    // Defer heavy Three.js init off the first paint to improve LCP
+    requestAnimationFrame(() => {
+      this.truck3DService.initializeScene(this.threeDContainer);
+      this.container3DService.initialize(
+        this.truck3DService.getScene(),
+        this.truck3DService.getCamera(),
+        this.truckDimensions ?? this.defaultDimensions,
+      );
+      this.truck3DService.createTruck(this.truckDimensions ?? this.defaultDimensions);
+      this.isLoading = false;
+    });
   }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['truckDimensions'] && !changes['truckDimensions'].firstChange) {
-      this.createTruckWithCurrentDimensions();
+      this.truck3DService.createTruck(this.truckDimensions ?? this.defaultDimensions);
     }
-  }
-
-  private createTruckWithCurrentDimensions(): void {
-    const dimensions = this.truckDimensions || {
-      width: 2500,   // 2.5m in mm
-      length: 12000, // 12m in mm
-      height: 4000   // 4m in mm
-    };
-
-    this.truck3DService.createTruck(dimensions);
   }
 
   ngOnDestroy(): void {
@@ -70,6 +55,7 @@ export class ThreeDView implements OnInit, AfterViewInit, OnDestroy, OnChanges {
     this.truck3DService.dispose();
   }
 
+  @HostListener('window:resize')
   onWindowResize(): void {
     if (this.threeDContainer) {
       this.truck3DService.onWindowResize(this.threeDContainer);
@@ -78,22 +64,17 @@ export class ThreeDView implements OnInit, AfterViewInit, OnDestroy, OnChanges {
 
   @HostListener('mousedown', ['$event'])
   onMouseDown(event: MouseEvent): void {
-    const canvas = this.truck3DService.getRenderer().domElement;
-    if (event.target !== canvas) return;
-
-    this.updateMousePosition(event);
-
-    const intersectedContainer = this.container3DService.getContainerAt(this.raycaster);
-    if (intersectedContainer) {
-      this.container3DService.startDrag(event, intersectedContainer, this.truck3DService.getCamera());
+    if (event.target !== this.truck3DService.getRenderer().domElement) return;
+    this.updateRaycaster(event);
+    const hit = this.container3DService.getContainerAt(this.raycaster);
+    if (hit) {
+      this.container3DService.startDrag(event, hit, this.truck3DService.getCamera());
     }
   }
 
   @HostListener('mousemove', ['$event'])
   onMouseMove(event: MouseEvent): void {
-    const canvas = this.truck3DService.getRenderer().domElement;
-    if (event.target !== canvas) return;
-
+    if (event.target !== this.truck3DService.getRenderer().domElement) return;
     this.container3DService.drag(event, this.truck3DService.getCamera());
   }
 
@@ -102,15 +83,14 @@ export class ThreeDView implements OnInit, AfterViewInit, OnDestroy, OnChanges {
     this.container3DService.endDrag();
   }
 
-  private updateMousePosition(event: MouseEvent): void {
-    const canvas = this.truck3DService.getRenderer().domElement;
-    const rect = canvas.getBoundingClientRect();
-    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-    this.raycaster.setFromCamera(this.mouse, this.truck3DService.getCamera());
-  }
-
   addContainer(containerData: Container): void {
     this.container3DService.addContainer(containerData);
+  }
+
+  private updateRaycaster(event: MouseEvent): void {
+    const rect = this.truck3DService.getRenderer().domElement.getBoundingClientRect();
+    this.mouse.x =  ((event.clientX - rect.left) / rect.width)  * 2 - 1;
+    this.mouse.y = -((event.clientY - rect.top)  / rect.height) * 2 + 1;
+    this.raycaster.setFromCamera(this.mouse, this.truck3DService.getCamera());
   }
 }

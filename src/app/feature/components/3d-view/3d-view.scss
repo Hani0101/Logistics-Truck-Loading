@@ -1,22 +1,6 @@
-.three-d-view-container {
+.three-d-canvas-container {
   width: 100%;
   height: 100%;
-}
-
-.three-d-header {
-  padding: 1rem;
-  h3 {
-    margin: 0;
-    color: #495057;
-    font-size: 1.25rem;
-    font-weight: 600;
-  }
-}
-
-.three-d-canvas-container {
-  flex: 1;
-  min-height: 400px;
-  width: 100%;
   position: relative;
 
   canvas {
@@ -32,25 +16,14 @@
   left: 50%;
   width: 40px;
   height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #3498db;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-top: 4px solid #3b82f6;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   transform: translate(-50%, -50%);
 }
 
 @keyframes spin {
-  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  0%   { transform: translate(-50%, -50%) rotate(0deg); }
   100% { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
-// Responsive design
-@media (max-width: 768px) {
-  .three-d-canvas-container {
-    min-height: 300px;
-  }
-
-  .three-d-header h3 {
-    font-size: 1.1rem;
-  }
 }

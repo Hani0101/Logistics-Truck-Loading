@@ -4,9 +4,9 @@ import { TruckDimensions } from '../../shared/models/truck.models';
 import { Truck3DService } from './truck-3d.service';
 import { Chromosome } from '../../shared/models/genetic.models';
 import { Container } from '../../shared/models/container.models';
-@Injectable({
-  providedIn: 'root'
-})
+import { ContainerPayload } from './layout';
+
+@Injectable({ providedIn: 'root' })
 export class Container3DService {
   private containers: Map<string, Container> = new Map();
   private scene!: THREE.Scene;
@@ -28,7 +28,6 @@ export class Container3DService {
     this.truckDimensions = truckDimensions;
   }
 
-
   addContainer(containerData: Container): Container[] {
     const scaleFactor = 0.001;
     const width  = containerData.width  * scaleFactor;
@@ -42,29 +41,29 @@ export class Container3DService {
       const id = `container-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       const material = new THREE.MeshStandardMaterial({
-        color: containerData.color || 0x3b82f6,
+        color: containerData.color ? parseInt(containerData.color.replace('#', ''), 16) : 0x3b82f6,
         metalness: 0.3,
         roughness: 0.4,
         transparent: true,
-        opacity: 0.8
+        opacity: 0.8,
       });
 
-      const mesh = new THREE.Mesh(geometry, material); // geometry can be shared
+      const mesh = new THREE.Mesh(geometry, material);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-
-      const edges = new THREE.EdgesGeometry(geometry);
-      const wireframe = new THREE.LineSegments(
-        edges,
-        new THREE.LineBasicMaterial({ color: containerData.color, linewidth: 2 })
+      mesh.add(
+        new THREE.LineSegments(
+          new THREE.EdgesGeometry(geometry),
+          new THREE.LineBasicMaterial({
+            color: containerData.color ? parseInt(containerData.color.replace('#', ''), 16) : 0x3b82f6,
+            linewidth: 2,
+          })
+        )
       );
-      mesh.add(wireframe);
 
-      // Offset each container so they don't overlap
       const initialPosition = new THREE.Vector3(i * (width + 0.05), height / 2, 0);
       mesh.position.copy(initialPosition);
       mesh.userData['containerId'] = id;
-
       this.scene.add(mesh);
 
       const container: Container = {
@@ -72,10 +71,10 @@ export class Container3DService {
         width, length, height,
         color: containerData.color,
         weight: containerData.weight,
-        amount: 1, // each instance represents 1 physical container
+        amount: 1,
         position: initialPosition,
         mesh,
-        originalMaterial: material
+        originalMaterial: material,
       };
 
       this.containers.set(id, container);
@@ -84,14 +83,104 @@ export class Container3DService {
 
     return results;
   }
+
+  syncIdsFromApi(apiContainers: (ContainerPayload & { id: string })[]): void {
+    const posKey = (x: number, y: number, z: number) =>
+      `${x.toFixed(4)},${y.toFixed(4)},${z.toFixed(4)}`;
+
+    const apiByPos = new Map<string, ContainerPayload & { id: string }>();
+    for (const api of apiContainers) {
+      if (api.position) {
+        apiByPos.set(posKey(api.position.x, api.position.y, api.position.z), api);
+      }
+    }
+
+    const newMap = new Map<string, Container>();
+
+    for (const local of this.containers.values()) {
+      if (!local.position) {
+        newMap.set(local.id!, local);
+        continue;
+      }
+
+      const key = posKey(local.position.x, local.position.y, local.position.z);
+      const api = apiByPos.get(key);
+
+      if (api) {
+        // Update the local container's id to the API UUID
+        local.id = api.id;
+        local.mesh!.userData['containerId'] = api.id;
+        newMap.set(api.id, local);
+        apiByPos.delete(key); // consume so duplicates don't double-match
+      } else {
+        // No match found — keep the old key
+        newMap.set(local.id!, local);
+      }
+    }
+
+    this.containers = newMap;
+  }
+
+  rebuildFromLayout(apiContainers: (ContainerPayload & { id: string })[]): void {
+    this.clear();
+
+    for (const c of apiContainers) {
+      const colorHex = c.color ? parseInt(c.color.replace('#', ''), 16) : 0x3b82f6;
+      const geometry = new THREE.BoxGeometry(c.width, c.height, c.length);
+      const material = new THREE.MeshStandardMaterial({
+        color: colorHex, metalness: 0.3, roughness: 0.4, transparent: true, opacity: 0.8,
+      });
+
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.add(
+        new THREE.LineSegments(
+          new THREE.EdgesGeometry(geometry),
+          new THREE.LineBasicMaterial({ color: colorHex, linewidth: 2 })
+        )
+      );
+
+      const pos = c.position
+        ? new THREE.Vector3(c.position.x, c.position.y, c.position.z)
+        : new THREE.Vector3(0, c.height / 2, 0);
+
+      mesh.position.copy(pos);
+      mesh.userData['containerId'] = c.id;
+      this.scene.add(mesh);
+
+      this.containers.set(c.id, {
+        id: c.id,
+        width: c.width, length: c.length, height: c.height,
+        color: c.color, weight: c.weight, amount: 1,
+        position: pos, mesh, originalMaterial: material,
+      });
+    }
+  }
+
+  updateSingleContainerPosition(id: string, position: THREE.Vector3): void {
+    const container = this.containers.get(id);
+    if (container?.mesh && container.position) {
+      container.position.copy(position);
+      container.mesh.position.copy(position);
+    }
+  }
+
+  serializeForApi(): ContainerPayload[] {
+    return Array.from(this.containers.values()).map((c) => ({
+      width: c.width, length: c.length, height: c.height,
+      weight: c.weight, amount: c.amount, color: c.color,
+      position: c.position
+        ? { x: c.position.x, y: c.position.y, z: c.position.z }
+        : undefined,
+    }));
+  }
+
   startDrag(event: MouseEvent, containerMesh: THREE.Mesh, camera: THREE.Camera): void {
     const containerId = containerMesh.userData['containerId'];
     const container = this.containers.get(containerId);
-    if(!container || !container.position) return;
-    console.log("container", containerId);
-    if (!container) return;
+    if (!container?.position) return;
 
-    // Deselect previous container if exists
     if (this.selectedContainer && this.selectedContainer.id !== container.id) {
       this.deselectContainer(this.selectedContainer);
     }
@@ -99,40 +188,20 @@ export class Container3DService {
     this.draggedContainer = container;
     this.selectedContainer = container;
     this.camera = camera;
-
-    // Disable OrbitControls while dragging
     this.truck3DService.disableControls();
-
-    // Select/highlight the container
     this.selectContainer(container);
-
-    // Update mouse position
     this.updateMousePosition(event);
-
-    // Set drag plane at container's current height
-    this.dragPlane.setFromNormalAndCoplanarPoint(
-      new THREE.Vector3(0, 1, 0),
-      container.position
-    );
-
-    // Show visual helper
+    this.dragPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), container.position);
     this.showVisualHelper(container);
   }
 
   drag(event: MouseEvent, camera: THREE.Camera): void {
-    if (!this.draggedContainer || !this.draggedContainer.position || !this.draggedContainer.mesh ) return;
-
+    if (!this.draggedContainer?.position || !this.draggedContainer.mesh) return;
     this.updateMousePosition(event);
     this.raycaster.setFromCamera(this.mouse, camera);
-
-    // Get intersection with drag plane
     this.raycaster.ray.intersectPlane(this.dragPlane, this.dragPoint);
-
-    // Update container position
     this.draggedContainer.position.copy(this.dragPoint);
     this.draggedContainer.mesh.position.copy(this.dragPoint);
-
-    // Update visual helper
     if (this.visualHelperMesh) {
       this.visualHelperMesh.position.copy(this.dragPoint);
       this.updateHelperColor();
@@ -140,47 +209,32 @@ export class Container3DService {
   }
 
   endDrag(): void {
-    // Re-enable OrbitControls after dragging
     this.truck3DService.enableControls();
-
     this.draggedContainer = null;
     this.hideVisualHelper();
   }
 
   selectContainer(container: Container): void {
-    if(!container.mesh) return;
-    const material = container.mesh.material as THREE.MeshStandardMaterial;
-    material.emissive.setHex(0xffd700); // Gold highlight
-    material.emissiveIntensity = 0.4;
+    if (!container.mesh) return;
+    const mat = container.mesh.material as THREE.MeshStandardMaterial;
+    mat.emissive.setHex(0xffd700);
+    mat.emissiveIntensity = 0.4;
   }
 
   deselectContainer(container: Container): void {
-    if(!container || !container.mesh) return;
-    const material = container.mesh.material as THREE.MeshStandardMaterial;
-    material.emissive.setHex(0x000000);
-    material.emissiveIntensity = 0;
+    if (!container?.mesh) return;
+    const mat = container.mesh.material as THREE.MeshStandardMaterial;
+    mat.emissive.setHex(0x000000);
+    mat.emissiveIntensity = 0;
   }
 
   private showVisualHelper(container: Container): void {
-    if(!container.position) return;
-    // Remove old helper if exists
-    if (this.visualHelperMesh) {
-      this.scene.remove(this.visualHelperMesh);
-    }
-
-    // Create helper geometry (slightly larger than container)
-    const helperGeometry = new THREE.BoxGeometry(
-      container.width * 1.05,
-      container.height * 1.05,
-      container.length * 1.05
+    if (!container.position) return;
+    if (this.visualHelperMesh) this.scene.remove(this.visualHelperMesh);
+    this.visualHelperMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(container.width * 1.05, container.height * 1.05, container.length * 1.05),
+      new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.2, wireframe: true })
     );
-    const helperMaterial = new THREE.MeshBasicMaterial({
-      color: 0x10b981,
-      transparent: true,
-      opacity: 0.2,
-      wireframe: true
-    });
-    this.visualHelperMesh = new THREE.Mesh(helperGeometry, helperMaterial);
     this.visualHelperMesh.position.copy(container.position);
     this.scene.add(this.visualHelperMesh);
   }
@@ -194,38 +248,32 @@ export class Container3DService {
 
   private updateHelperColor(): void {
     if (!this.visualHelperMesh || !this.draggedContainer) return;
-
-    const isInside = this.isContainerInside(this.draggedContainer);
-    const color = isInside ? 0x10b981 : 0xef4444; // Green if inside, red if outside
-    (this.visualHelperMesh.material as THREE.MeshBasicMaterial).color.setHex(color);
+    (this.visualHelperMesh.material as THREE.MeshBasicMaterial).color.setHex(
+      this.isContainerInside(this.draggedContainer) ? 0x10b981 : 0xef4444
+    );
   }
 
   private isContainerInside(container: Container): boolean {
-    const scaleFactor = 0.001;
-    const truckWidth = this.truckDimensions.width * scaleFactor;
-    const truckLength = this.truckDimensions.length * scaleFactor;
-    const truckHeight = this.truckDimensions.height * scaleFactor;
-
+    const f = 0.001;
+    const tw = this.truckDimensions.width * f;
+    const tl = this.truckDimensions.length * f;
+    const th = this.truckDimensions.height * f;
     const pos = container.position;
-    const halfWidth = container.width / 2;
-    const halfLength = container.length / 2;
-    const halfHeight = container.height / 2;
-    if(!pos) return false;
-
+    if (!pos) return false;
     return (
-      pos.x - halfWidth >= -truckWidth / 2 &&
-      pos.x + halfWidth <= truckWidth / 2 &&
-      pos.z - halfLength >= -truckLength / 2 &&
-      pos.z + halfLength <= truckLength / 2 &&
-      pos.y - halfHeight >= 0 &&
-      pos.y + halfHeight <= truckHeight
+      pos.x - container.width  / 2 >= -tw / 2 &&
+      pos.x + container.width  / 2 <=  tw / 2 &&
+      pos.z - container.length / 2 >= -tl / 2 &&
+      pos.z + container.length / 2 <=  tl / 2 &&
+      pos.y - container.height / 2 >= 0 &&
+      pos.y + container.height / 2 <=  th
     );
   }
 
   private updateMousePosition(event: MouseEvent): void {
     const rect = (event.target as HTMLElement).getBoundingClientRect();
-    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    this.mouse.x =  ((event.clientX - rect.left) / rect.width)  * 2 - 1;
+    this.mouse.y = -((event.clientY - rect.top)  / rect.height) * 2 + 1;
   }
 
   getContainers(): Container[] {
@@ -233,60 +281,32 @@ export class Container3DService {
   }
 
   getContainerAt(raycaster: THREE.Raycaster): THREE.Mesh | null {
-    const containers = Array.from(this.containers.values()).map(c => c.mesh!);
-    const intersects = raycaster.intersectObjects(containers, true); // Set recursive to true
-
-    if (intersects.length > 0) {
-      let intersectedObject = intersects[0].object;
-
-      // Traverse up to find the parent mesh with the containerId
-      while (intersectedObject && !intersectedObject.userData['containerId']) {
-        intersectedObject = intersectedObject.parent as THREE.Mesh;
-      }
-      return intersectedObject as THREE.Mesh | null;
-    }
-
-    return null;
+    const meshes = Array.from(this.containers.values()).map((c) => c.mesh!);
+    const intersects = raycaster.intersectObjects(meshes, true);
+    if (!intersects.length) return null;
+    let obj = intersects[0].object;
+    while (obj && !obj.userData['containerId']) obj = obj.parent as THREE.Mesh;
+    return obj as THREE.Mesh | null;
   }
 
-  // updateLayout(layout: Chromosome): void {
-  //   layout.genes.forEach(gene => {
-  //     const container = this.containers.get(gene.id);
-  //     if (container) {
-  //       container.position.copy(gene.position);
-  //       container.mesh.position.copy(gene.position);
-  //     }
-  //   });
-  // }
   updateLayout(layout: Chromosome): void {
-  layout.genes.forEach((container, i) => {
-    const sceneContainer = this.containers.get(container.id!);
-    if (sceneContainer) {
-      const newPosition = layout.positions[i];
-      if(sceneContainer.position && sceneContainer.mesh) {
-        sceneContainer.position.copy(newPosition);
-        sceneContainer.mesh.position.copy(newPosition);
+    layout.genes.forEach((container, i) => {
+      const sc = this.containers.get(container.id!);
+      if (sc?.position && sc.mesh) {
+        sc.position.copy(layout.positions[i]);
+        sc.mesh.position.copy(layout.positions[i]);
       }
-    }
-  });
-}
+    });
+  }
 
   removeContainer(id: string): void {
-    const container = this.containers.get(id);
-    if (container) {
-      if(container.mesh) {
-        this.scene.remove(container.mesh);
-      }
-      this.containers.delete(id);
-    }
+    const c = this.containers.get(id);
+    if (c?.mesh) this.scene.remove(c.mesh);
+    this.containers.delete(id);
   }
 
   clear(): void {
-    this.containers.forEach(container => {
-      if(container.mesh) {
-        this.scene.remove(container.mesh);
-      }
-    });
+    this.containers.forEach((c) => { if (c.mesh) this.scene.remove(c.mesh); });
     this.containers.clear();
     this.selectedContainer = null;
     this.draggedContainer = null;
