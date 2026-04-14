@@ -13,6 +13,63 @@
   padding: 0.5rem 0;
 }
 
+.section-divider {
+  height: 1px;
+  background: $border-color;
+  margin: 0.25rem 0;
+}
+
+.section-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $text-muted;
+  margin-bottom: 0.25rem;
+}
+
+.layout-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.active-layout {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  background: rgba($accent, 0.08);
+  border: 1px solid rgba($accent, 0.25);
+  border-radius: 6px;
+
+  i {
+    color: $accent;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+}
+
+.active-layout-name {
+  font-size: 0.78rem;
+  color: $accent;
+  font-family: $font-mono;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.load-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+
+  p-select {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
 .color-field {
   display: flex;
   flex-direction: column;
@@ -34,4 +91,10 @@
   font-family: $font-mono;
   font-size: 0.8rem;
   color: $text-muted;
+}
+
+.save-error {
+  font-size: 0.78rem;
+  color: #ef4444;
+  margin: 0;
 }

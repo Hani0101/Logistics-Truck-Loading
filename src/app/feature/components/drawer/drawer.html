@@ -1,4 +1,6 @@
 <div class="drawer-triggers">
+
+  <!-- Truck -->
   <p-button
     (click)="createTruck = true"
     icon="pi pi-truck"
@@ -7,6 +9,7 @@
     [fluid]="true">
   </p-button>
 
+  <!-- Container -->
   <p-button
     (click)="visible = true"
     icon="pi pi-warehouse"
@@ -14,6 +17,58 @@
     [outlined]="true"
     [fluid]="true">
   </p-button>
+
+  <div class="section-divider"></div>
+
+  <!-- Layout save / load -->
+  <div class="layout-section">
+    <p class="section-label">Layouts</p>
+
+    @if (activeLayoutName) {
+      <div class="active-layout">
+        <i class="pi pi-check-circle"></i>
+        <span class="active-layout-name" [title]="activeLayoutName">{{ activeLayoutName }}</span>
+      </div>
+    }
+
+    <p-button
+      (click)="openSaveDrawer()"
+      icon="pi pi-save"
+      label="Save Layout"
+      [outlined]="true"
+      [fluid]="true"
+      severity="secondary">
+    </p-button>
+
+    <div class="load-row">
+      <p-select
+        [(ngModel)]="selectedLayoutId"
+        [options]="savedLayouts"
+        optionLabel="name"
+        optionValue="id"
+        placeholder="Select layout..."
+        [fluid]="true"
+        emptyMessage="No saved layouts">
+      </p-select>
+      <p-button
+        (click)="loadLayout()"
+        icon="pi pi-upload"
+        [loading]="isLoading"
+        [disabled]="!selectedLayoutId">
+      </p-button>
+    </div>
+
+    @if (selectedLayoutId && activeLayoutName) {
+      <p-button
+        (click)="deleteActiveLayout()"
+        icon="pi pi-trash"
+        label="Delete Layout"
+        [outlined]="true"
+        [fluid]="true"
+        severity="danger">
+      </p-button>
+    }
+  </div>
 </div>
 
 <!-- Truck Drawer -->
@@ -32,14 +87,8 @@
       <label for="truck_height">Height (mm)</label>
     </p-floatlabel>
   </div>
-
   <ng-template pTemplate="footer">
-    <p-button
-      (click)="updateTruck()"
-      label="Update Truck"
-      icon="pi pi-refresh"
-      [fluid]="true">
-    </p-button>
+    <p-button (click)="updateTruck()" label="Update Truck" icon="pi pi-refresh" [fluid]="true" />
   </ng-template>
 </p-drawer>
 
@@ -66,7 +115,6 @@
       <input type="number" pInputText id="container_amount" [(ngModel)]="containerDetails.amount" />
       <label for="container_amount">Amount</label>
     </p-floatlabel>
-
     <div class="color-field">
       <span class="color-label">Color</span>
       <div class="color-row">
@@ -75,13 +123,32 @@
       </div>
     </div>
   </div>
+  <ng-template pTemplate="footer">
+    <p-button (click)="addContainer()" label="Add Container" icon="pi pi-plus" [fluid]="true" />
+  </ng-template>
+</p-drawer>
 
+<!-- Save Layout Drawer -->
+<p-drawer [(visible)]="saveVisible" header="Save Layout" position="left">
+  <div class="form-fields">
+    <p-floatlabel>
+      <input
+        pInputText
+        id="layout_name"
+        [(ngModel)]="newLayoutName"
+        (keyup.enter)="confirmSave()" />
+      <label for="layout_name">Layout name</label>
+    </p-floatlabel>
+    @if (saveError) {
+      <p class="save-error">{{ saveError }}</p>
+    }
+  </div>
   <ng-template pTemplate="footer">
     <p-button
-      (click)="addContainer()"
-      label="Add Container"
-      icon="pi pi-plus"
-      [fluid]="true">
-    </p-button>
+      (click)="confirmSave()"
+      label="Save"
+      icon="pi pi-check"
+      [fluid]="true"
+      [loading]="isSaving" />
   </ng-template>
 </p-drawer>
