@@ -96,6 +96,17 @@
 <!-- Container Drawer -->
 <p-drawer [(visible)]="visible" header="Add Container" position="left">
   <div class="form-fields">
+    <div>
+      <p class="color-label">Container Type</p>
+      <p-selectbutton
+        [(ngModel)]="containerDetails.containerType"
+        [options]="containerTypeOptions"
+        optionLabel="label"
+        optionValue="value"
+        (ngModelChange)="onContainerTypeChange($event)"
+        [allowEmpty]="false">
+      </p-selectbutton>
+    </div>
     <p-floatlabel>
       <input type="number" pInputText id="container_width" [(ngModel)]="containerDetails.width" />
       <label for="container_width">Width (mm)</label>
@@ -116,6 +127,7 @@
       <input type="number" pInputText id="container_amount" [(ngModel)]="containerDetails.amount" />
       <label for="container_amount">Amount</label>
     </p-floatlabel>
+    @if (containerDetails.containerType === 'box') {
     <div class="color-field">
       <span class="color-label">Color</span>
       <div class="color-row">
@@ -123,6 +135,8 @@
         <span class="color-hex">#{{ containerDetails.color }}</span>
       </div>
     </div>
+  }
+
   </div>
   <ng-template pTemplate="footer">
     <p-button (click)="addContainer()" label="Add Container" icon="pi pi-plus" [fluid]="true" />

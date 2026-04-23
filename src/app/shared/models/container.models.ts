@@ -1,8 +1,11 @@
 import * as THREE from 'three';
 
+export type ContainerType = 'box' | 'crate' | 'wooden-crate';
+
 export interface Container {
   id?: string;
   groupId?: string;  // shared across containers created from the same spec (same addContainer call)
+  containerType?: ContainerType;
   width: number;
   length: number;
   height: number;
@@ -10,6 +13,6 @@ export interface Container {
   amount: number;
   color?: string;
   position?: THREE.Vector3;
-  mesh?: THREE.Mesh;
+  mesh?: THREE.Mesh | THREE.Group;
   originalMaterial?: THREE.MeshStandardMaterial;
 }

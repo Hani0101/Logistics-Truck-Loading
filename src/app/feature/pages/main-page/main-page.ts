@@ -61,8 +61,9 @@ export class MainPage implements OnInit, OnDestroy {
   isSavingContainers = false;
 
   algorithmOptions: AlgorithmOption[] = [
-    { label: 'Genetic Algorithm', value: 'genetic', icon: 'pi pi-sitemap', desc: '150 generations, evolutionary' },
-    { label: 'Bin Packing (BLF)', value: 'binpacking', icon: 'pi pi-th-large', desc: '12 passes, deterministic + random' },
+    { label: 'Genetic Algorithm',   value: 'genetic',    icon: 'pi pi-sitemap',  desc: '150 generations, evolutionary' },
+    { label: 'Bin Packing (BLF)',   value: 'binpacking', icon: 'pi pi-th-large', desc: '12 passes, deterministic + random' },
+    { label: 'Maximal Rectangles',  value: 'maxrects',   icon: 'pi pi-stop',     desc: '7 passes, greedy + BSSF' },
   ];
   selectedAlgorithm: AlgorithmType = 'binpacking';
 
@@ -264,6 +265,14 @@ export class MainPage implements OnInit, OnDestroy {
         });
       },
     });
+  }
+
+  getAlgorithmLabel(algo: AlgorithmType): string {
+    switch (algo) {
+      case 'genetic':  return 'Genetic Algorithm';
+      case 'maxrects': return 'Maximal Rectangles';
+      default:         return 'Bin Packing';
+    }
   }
 
   ngOnDestroy(): void {

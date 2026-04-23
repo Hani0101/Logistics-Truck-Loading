@@ -1,7 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import {environment} from '../../../../environments/environment'
+import { environment } from '../../../../environments/environment';
+import { ContainerType } from '../../shared/models/container.models';
+
 export interface LayoutSummary {
   id: string;
   name: string;
@@ -18,6 +20,7 @@ export interface ContainerPayload {
   weight: number;
   amount: number;
   color?: string;
+  containerType?: ContainerType;
   position?: { x: number; y: number; z: number };
 }
 

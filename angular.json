@@ -28,6 +28,11 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "**/*",
+                "input": "3dModels",
+                "output": "3dModels"
               }
             ],
             "styles": [
