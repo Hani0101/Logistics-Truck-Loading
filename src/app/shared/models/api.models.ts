@@ -70,3 +70,27 @@ export interface ContainerUpdatePayload {
   color?: string;
   position?: Vector3Payload;
 }
+
+export interface DispatchUpdatePayload {
+  status?: 'scheduled' | 'in_transit' | 'delivered' | 'cancelled';
+}
+
+export interface DispatchPayload {
+  layout_id: string;
+  from_location: string;
+  to_location: string;
+  dispatch_at: string; // ISO 8601
+}
+
+export type DispatchStatus = 'scheduled' | 'in_transit' | 'delivered' | 'cancelled';
+
+export interface DispatchResponse {
+  id: string;
+  layout_id: string | null;
+  from_location: string;
+  to_location: string;
+  dispatch_at: string;
+  status: DispatchStatus;
+  created_at: string;
+  updated_at: string;
+}

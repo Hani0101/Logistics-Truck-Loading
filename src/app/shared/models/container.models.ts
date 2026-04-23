@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 export interface Container {
   id?: string;
+  groupId?: string;  // shared across containers created from the same spec (same addContainer call)
   width: number;
   length: number;
   height: number;
