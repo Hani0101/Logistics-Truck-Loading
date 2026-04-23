@@ -2,9 +2,10 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { GaWorkerRequest, GaWorkerMessage } from '../workers/ga.worker';
 import { BPWorkerRequest, BPWorkerMessage } from '../workers/bin-packing.worker';
+import { MRWorkerRequest, MRWorkerMessage } from '../workers/maxrects.worker';
 import { PackingOptions, DEFAULT_PACKING_OPTIONS, GaOptions } from '../../shared/models/packing-options.models';
 
-export type AlgorithmType = 'genetic' | 'binpacking';
+export type AlgorithmType = 'genetic' | 'binpacking' | 'maxrects';
 
 export interface OptimizationProgress {
   algorithm: AlgorithmType;
@@ -36,6 +37,7 @@ export interface WorkerContainer {
 export class OptimizationService implements OnDestroy {
   private gaWorker: Worker | null = null;
   private bpWorker: Worker | null = null;
+  private mrWorker: Worker | null = null;
 
   private progress$ = new Subject<OptimizationProgress>();
   private result$   = new Subject<OptimizationResult>();
@@ -77,6 +79,8 @@ export class OptimizationService implements OnDestroy {
 
     if (algorithm === 'genetic') {
       this.runGA({ containers, truckWidthMm, truckLengthMm, truckHeightMm, packingOptions, gaOptions });
+    } else if (algorithm === 'maxrects') {
+      this.runMaxRects({ containers, truckWidthMm, truckLengthMm, truckHeightMm, packingOptions });
     } else {
       this.runBP({ containers, truckWidthMm, truckLengthMm, truckHeightMm, packingOptions });
     }
@@ -85,8 +89,10 @@ export class OptimizationService implements OnDestroy {
   cancel(): void {
     this.gaWorker?.terminate();
     this.bpWorker?.terminate();
+    this.mrWorker?.terminate();
     this.gaWorker = null;
     this.bpWorker = null;
+    this.mrWorker = null;
     this.running = false;
   }
 
@@ -167,6 +173,47 @@ export class OptimizationService implements OnDestroy {
     });
 
     this.bpWorker.postMessage(request);
+  }
+
+  private runMaxRects(request: MRWorkerRequest): void {
+    this.mrWorker = new Worker(
+      new URL('../workers/maxrects.worker', import.meta.url),
+      { type: 'module' },
+    );
+
+    this.mrWorker.addEventListener('message', ({ data }: MessageEvent<MRWorkerMessage>) => {
+      if (data.type === 'progress') {
+        this.progress$.next({
+          algorithm: 'maxrects',
+          percent: Math.round((data.passIndex / data.totalPasses) * 100),
+          label: `Pass ${data.passIndex} / ${data.totalPasses}: ${data.strategyName}`,
+          detail: `Score: ${data.thisPassScore.toFixed(1)}  ·  Best so far: ${data.currentBestScore.toFixed(1)}`,
+          improved: data.improved,
+          positions: data.positions,
+        });
+      } else if (data.type === 'result') {
+        this.running = false;
+        this.result$.next({
+          success: data.success,
+          positions: data.positions,
+          error: data.error,
+          summary: data.success
+            ? `Best strategy: ${data.bestStrategy} · score ${data.bestScore?.toFixed(1)}`
+            : undefined,
+        });
+        this.mrWorker?.terminate();
+        this.mrWorker = null;
+      }
+    });
+
+    this.mrWorker.addEventListener('error', (e: ErrorEvent) => {
+      this.running = false;
+      this.result$.next({ success: false, error: e.message });
+      this.mrWorker?.terminate();
+      this.mrWorker = null;
+    });
+
+    this.mrWorker.postMessage(request);
   }
 
   ngOnDestroy(): void {
