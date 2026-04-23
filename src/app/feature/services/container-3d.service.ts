@@ -37,6 +37,9 @@ export class Container3DService {
     const geometry = new THREE.BoxGeometry(width, height, length);
     const results: Container[] = [];
 
+    // All containers from the same addContainer call share a groupId
+    const groupId = `group-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+
     for (let i = 0; i < containerData.amount; i++) {
       const id = `container-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -68,6 +71,7 @@ export class Container3DService {
 
       const container: Container = {
         id,
+        groupId,
         width, length, height,
         color: containerData.color,
         weight: containerData.weight,
@@ -107,13 +111,11 @@ export class Container3DService {
       const api = apiByPos.get(key);
 
       if (api) {
-        // Update the local container's id to the API UUID
         local.id = api.id;
         local.mesh!.userData['containerId'] = api.id;
         newMap.set(api.id, local);
-        apiByPos.delete(key); // consume so duplicates don't double-match
+        apiByPos.delete(key);
       } else {
-        // No match found — keep the old key
         newMap.set(local.id!, local);
       }
     }
@@ -124,7 +126,17 @@ export class Container3DService {
   rebuildFromLayout(apiContainers: (ContainerPayload & { id: string })[]): void {
     this.clear();
 
+    // Infer groupId from matching dimensions + color
+    const groupKey = (c: ContainerPayload) =>
+      `${c.width.toFixed(6)}_${c.length.toFixed(6)}_${c.height.toFixed(6)}_${c.color ?? ''}`;
+    const groupMap = new Map<string, string>();
+
     for (const c of apiContainers) {
+      const key = groupKey(c);
+      if (!groupMap.has(key)) {
+        groupMap.set(key, `group-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`);
+      }
+
       const colorHex = c.color ? parseInt(c.color.replace('#', ''), 16) : 0x3b82f6;
       const geometry = new THREE.BoxGeometry(c.width, c.height, c.length);
       const material = new THREE.MeshStandardMaterial({
@@ -151,6 +163,7 @@ export class Container3DService {
 
       this.containers.set(c.id, {
         id: c.id,
+        groupId: groupMap.get(key),
         width: c.width, length: c.length, height: c.height,
         color: c.color, weight: c.weight, amount: 1,
         position: pos, mesh, originalMaterial: material,
