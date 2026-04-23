@@ -82,6 +82,7 @@
         "test": {
           "builder": "@angular/build:unit-test",
           "options": {
+            "webWorkerTsConfig": "tsconfig.worker.json"
           }
         }
       }
