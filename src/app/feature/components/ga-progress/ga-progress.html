@@ -1,0 +1,43 @@
+@if (visible) {
+  <div class="ga-overlay">
+    <div class="ga-header">
+      <span class="ga-label">Genetic Algorithm</span>
+      <span class="ga-badge">Running</span>
+    </div>
+
+    <div class="ga-stats">
+      <div class="stat-row">
+        <span class="stat-label">Generation</span>
+        <span class="stat-value">{{ generation }} / {{ totalGenerations }}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Best fitness</span>
+        <span class="stat-value">{{ bestFitness | number:'1.1-1' }}</span>
+      </div>
+    </div>
+
+    <!-- Generation progress bar -->
+    <div class="bar-group">
+      <div class="bar-label">
+        <span>Progress</span>
+        <span>{{ progressPercent }}%</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill bar-fill--progress" [style.width.%]="progressPercent"></div>
+      </div>
+    </div>
+
+    <!-- Layout quality bar -->
+    <div class="bar-group">
+      <div class="bar-label">
+        <span>Layout quality</span>
+        <span>{{ qualityPercent }}%</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill bar-fill--quality" [style.width.%]="qualityPercent"></div>
+      </div>
+    </div>
+
+    <p class="ga-hint">Containers update live every 10 generations</p>
+  </div>
+}

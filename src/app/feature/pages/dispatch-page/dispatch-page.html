@@ -1,0 +1,160 @@
+<p-toast position="top-right" />
+
+<div class="dispatch-layout">
+
+  <!-- ── Schedule Form ───────────────────────────────────────── -->
+  <div class="dispatch-card">
+    <div class="card-header">
+      <i class="pi pi-send"></i>
+      <div>
+        <h2>Schedule Dispatch</h2>
+        <p>Select a load plan, set the origin, destination and departure time.</p>
+      </div>
+    </div>
+
+    <div class="card-body">
+      <div class="field">
+        <label class="field-label">Load Plan</label>
+        <p-select
+          [(ngModel)]="selectedLayoutId"
+          [options]="layoutOptions"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Select a saved layout"
+          [style]="{ width: '100%' }"
+          appendTo="body"
+        />
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label">From</label>
+          <p-floatlabel variant="on">
+            <input pInputText id="fromLocation" [(ngModel)]="fromLocation" style="width:100%" />
+            <label for="fromLocation">Origin</label>
+          </p-floatlabel>
+        </div>
+
+        <div class="field-arrow"><i class="pi pi-arrow-right"></i></div>
+
+        <div class="field">
+          <label class="field-label">To</label>
+          <p-floatlabel variant="on">
+            <input pInputText id="toLocation" [(ngModel)]="toLocation" style="width:100%" />
+            <label for="toLocation">Destination</label>
+          </p-floatlabel>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Departure Date &amp; Time</label>
+        <p-datepicker
+          [(ngModel)]="dispatchAt"
+          [showTime]="true"
+          [showIcon]="true"
+          [minDate]="minDate"
+          dateFormat="dd/mm/yy"
+          hourFormat="24"
+          [style]="{ width: '100%' }"
+          appendTo="body"
+        />
+      </div>
+
+      @if (formValid && dispatchAt) {
+        <div class="summary">
+          <i class="pi pi-info-circle"></i>
+          <span>
+            Dispatching <strong>{{ selectedLayoutName }}</strong>
+            from <strong>{{ fromLocation }}</strong> to <strong>{{ toLocation }}</strong>
+            on <strong>{{ dispatchAt | date:'dd MMM yyyy, HH:mm' }}</strong>.
+          </span>
+        </div>
+      }
+    </div>
+
+    <div class="card-footer">
+      <p-button
+        label="Schedule Dispatch"
+        icon="pi pi-send"
+        [loading]="submitting"
+        [disabled]="!formValid"
+        (onClick)="submit()"
+      />
+    </div>
+  </div>
+
+  <!-- ── Dispatches Table ────────────────────────────────────── -->
+  <div class="dispatch-card table-card">
+    <div class="card-header">
+      <i class="pi pi-list"></i>
+      <div>
+        <h2>Dispatch History</h2>
+        <p>Track the status of all scheduled and completed dispatches.</p>
+      </div>
+    </div>
+
+    <p-table
+      [value]="dispatches"
+      [paginator]="dispatches.length > 10"
+      [rows]="10"
+      [tableStyle]="{ 'min-width': '600px' }"
+    >
+      <ng-template pTemplate="header">
+        <tr>
+          <th>Load Plan</th>
+          <th>From</th>
+          <th>To</th>
+          <th>Departure</th>
+          <th>Status</th>
+          <th class="col-actions">Actions</th>
+        </tr>
+      </ng-template>
+
+      <ng-template pTemplate="body" let-d>
+        <tr>
+          <td>{{ layoutNameById(d.layout_id) }}</td>
+          <td>{{ d.from_location }}</td>
+          <td>{{ d.to_location }}</td>
+          <td class="mono">{{ d.dispatch_at | date:'dd MMM yy, HH:mm' }}</td>
+          <td>
+            <p-tag [value]="tagLabel(d.status)" [severity]="tagSeverity(d.status)" />
+          </td>
+          <td class="col-actions">
+            @if (isActive(d.status)) {
+              <div class="action-btns">
+                <p-button
+                  label="Delivered"
+                  icon="pi pi-check"
+                  severity="success"
+                  size="small"
+                  [loading]="updatingId === d.id"
+                  (onClick)="markDelivered(d)"
+                />
+                <p-button
+                  label="Cancel"
+                  icon="pi pi-times"
+                  severity="danger"
+                  size="small"
+                  [outlined]="true"
+                  [loading]="updatingId === d.id"
+                  (onClick)="markCancelled(d)"
+                />
+              </div>
+            } @else {
+              <span class="no-actions">—</span>
+            }
+          </td>
+        </tr>
+      </ng-template>
+
+      <ng-template pTemplate="emptymessage">
+        <tr>
+          <td colspan="6" class="empty-row">
+            <i class="pi pi-inbox"></i> No dispatches yet.
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
+
+</div>
