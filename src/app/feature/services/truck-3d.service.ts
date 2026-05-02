@@ -97,7 +97,7 @@ export class Truck3DService {
 
     // Create truck cargo area wireframe
     // const cargoGeometry = new THREE.BoxGeometry(length * 0.7, height * 0.9, width);
-    const cargoGeometry = new THREE.BoxGeometry(width, height * 0.9, length * 0.7);
+    const cargoGeometry = new THREE.BoxGeometry(width, height * 0.9, length * 0.8);
     const cargoEdges = new THREE.EdgesGeometry(cargoGeometry);
     const cargoWireframe = new THREE.LineSegments(cargoEdges, wireframeMaterial);
     // cargoWireframe.position.set(length * 0.15, height * 0.45, 0);

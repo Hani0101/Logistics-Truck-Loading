@@ -68,7 +68,7 @@ const PROGRESS_INTERVAL = 5;
 interface TruckBox { w: number; l: number; h: number; }
 interface Vec3     { x: number; y: number; z: number; }
 
-interface Gene {
+interface Gene { // gene represents 1 container
   id: string;
   groupId?: string;
   tag: number;
@@ -81,15 +81,19 @@ interface Gene {
 
 interface PlacedGene { pos: Vec3; g: Gene; }
 
-interface Chromosome {
+interface Chromosome { // chromosome represents 1 packing solution
   genes: Gene[];
   positions: Vec3[];
   fitness: number;
 }
 
-function cargoBox(wMm: number, lMm: number, hMm: number): TruckBox {
-  const f = 0.001;
-  return { w: wMm * f, l: lMm * f * 0.7, h: hMm * f * 0.9 };
+function truckBox(wMm: number, lMm: number, hMm: number): TruckBox {
+  const f = 0.001; // convert mm to m
+  return { w: wMm * f, l: lMm * f * 0.8, h: hMm * f * 0.9 }; 
+  // 0.8 is hardcoded to reflect that 80% of the truck length is usable and the rest of the 20% is to
+  // represent the the rear gap and cabin bulhead
+  // 0.9 is hardcoded to reflect that 90% of the truck's height is only usable
+  // TODO: find a better way to reflect the usage of these dimensions
 }
 
 function containersToGenes(containers: GaContainer[]): Gene[] {
@@ -114,11 +118,11 @@ function groupedShuffle(genes: Gene[]): Gene[] {
   }
 
   const groupArr = [...groups.values()];
-  for (let i = groupArr.length - 1; i > 0; i--) {
+  for (let i = groupArr.length - 1; i > 0; i--) { // shuffle the groups
     const j = Math.floor(Math.random() * (i + 1));
     [groupArr[i], groupArr[j]] = [groupArr[j], groupArr[i]];
   }
-  for (const g of groupArr) {
+  for (const g of groupArr) { // shuffle within the group
     for (let i = g.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [g[i], g[j]] = [g[j], g[i]];
@@ -146,10 +150,7 @@ function findRestingY(
 
 // Returns true when this container would be directly supported by a same-group container.
 // Used to prefer vertical compaction within a group when mixed stacking is disabled.
-function isStackingOnSameGroup(
-  cx: number, cy: number, cz: number, c: Gene,
-  placed: PlacedGene[],
-): boolean {
+function isStackingOnSameGroup(cx: number, cy: number, cz: number, c: Gene, placed: PlacedGene[],): boolean {
   if (!c.groupId) return false;
   const bottom = cy - c.height / 2;
   if (bottom < 1e-6) return false;
@@ -232,22 +233,23 @@ function findFallbackPosition(
   const maxY = placed.reduce((m, p) => Math.max(m, p.pos.y + p.g.height / 2), 0);
   return { x: 0, y: maxY + c.height / 2, z: 0 };
 }
-
+// place containers functions uses the logic of anchoring each x and z axis to
+// determine the start of the new introduced container
+// ps: initially it starts from bottom left corner
 function placeContainers(ordered: Gene[], truck: TruckBox, allowMixedStacking: boolean): Vec3[] {
   const placed: PlacedGene[] = [];
   const anchorsX = new Set<number>([-truck.w / 2]);
   const anchorsZ = new Set<number>([-truck.l / 2]);
-
   for (const c of ordered) {
     let bestPos: Vec3 | null = null;
     let bestScore = Infinity;
-
+  
     for (const ax of [...anchorsX].sort((a, b) => a - b)) {
       for (const az of [...anchorsZ].sort((a, b) => a - b)) {
-        const cx = ax + c.width  / 2;
+        const cx = ax + c.width  / 2; // trying every combination of x and z anchors
         const cz = az + c.length / 2;
 
-        if (cx + c.width  / 2 > truck.w / 2 + 1e-6) continue;
+        if (cx + c.width  / 2 > truck.w / 2 + 1e-6) continue; // avoid rejecting valid positions due to decimals
         if (cz + c.length / 2 > truck.l / 2 + 1e-6) continue;
 
         const cy = findRestingY(cx, cz, c, placed, truck.h);
@@ -261,10 +263,9 @@ function placeContainers(ordered: Gene[], truck: TruckBox, allowMixedStacking: b
         }
 
         // When mixed stacking is off, strongly prefer stacking within the same
-        // group — this compacts each group vertically and frees floor space for
+        // group, this compacts each group vertically and frees floor space for
         // other groups instead of spreading everything across the floor.
-        const sameGroupStack = !allowMixedStacking &&
-          isStackingOnSameGroup(cx, cy, cz, c, placed);
+        const sameGroupStack = !allowMixedStacking && isStackingOnSameGroup(cx, cy, cz, c, placed);
         const yScore = sameGroupStack ? cy * 100 : cy * 1_000_000;
         const score = yScore + (cz + truck.l / 2) * 1000 + (cx + truck.w / 2);
         if (score < bestScore) {
@@ -277,12 +278,12 @@ function placeContainers(ordered: Gene[], truck: TruckBox, allowMixedStacking: b
     if (!bestPos) {
       bestPos = findFallbackPosition(c, placed, truck, allowMixedStacking);
     }
-
+    console.log("bestPos", bestPos);
     placed.push({ pos: bestPos, g: c });
     anchorsX.add(bestPos.x + c.width  / 2);
     anchorsZ.add(bestPos.z + c.length / 2);
   }
-
+  console.log("placed",placed);
   return placed.map((p) => p.pos);
 }
 
@@ -320,7 +321,7 @@ function ox(primary: Gene[], secondary: Gene[]): Gene[] {
   let lo = Math.floor(Math.random() * n);
   let hi = Math.floor(Math.random() * n);
   if (lo > hi) [lo, hi] = [hi, lo];
-  const segment    = primary.slice(lo, hi + 1);
+  const segment = primary.slice(lo, hi + 1);
   const segmentTags = new Set(segment.map((g) => g.tag));
   const rest = secondary.filter((g) => !segmentTags.has(g.tag));
   return [...rest.slice(0, lo), ...segment, ...rest.slice(lo)];
@@ -428,10 +429,9 @@ function runGA(request: GaWorkerRequest): void {
     return;
   }
 
-  const truck = cargoBox(truckWidthMm, truckLengthMm, truckHeightMm);
+  const truck = truckBox(truckWidthMm, truckLengthMm, truckHeightMm);
   const genes = containersToGenes(containers);
   const tagToId = new Map<number, string>(genes.map((g) => [g.tag, g.id]));
-
   const shuffleFn = groupSameType
     ? () => groupedShuffle([...genes])
     : () => [...genes].sort(() => Math.random() - 0.5);
