@@ -56,7 +56,7 @@ export type GaWorkerMessage = GaProgressMessage | GaResultMessage;
 export interface TruckBox { w: number; l: number; h: number; }
 export interface Vec3     { x: number; y: number; z: number; }
 
-export interface Gene {
+export interface Gene { // represents each container and which group it belongs to
   id: string;
   groupId?: string;
   tag: number;
@@ -69,7 +69,7 @@ export interface Gene {
 
 export interface PlacedGene { pos: Vec3; g: Gene; }
 
-export interface Chromosome {
+export interface Chromosome { // chromosome is the possible solution, which is a list of genes (containers) and their positions in the truck
   genes: Gene[];
   positions: Vec3[];
   fitness: number;

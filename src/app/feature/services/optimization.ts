@@ -1,6 +1,6 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
-import { GaWorkerRequest, GaWorkerMessage } from '../workers/ga.worker';
+import { GaWorkerRequest, GaWorkerMessage } from '../workers/ga.models';
 import { BPWorkerRequest, BPWorkerMessage } from '../workers/bin-packing.worker';
 import { MRWorkerRequest, MRWorkerMessage } from '../workers/maxrects.worker';
 import { PackingOptions, DEFAULT_PACKING_OPTIONS, GaOptions } from '../../shared/models/packing-options.models';
