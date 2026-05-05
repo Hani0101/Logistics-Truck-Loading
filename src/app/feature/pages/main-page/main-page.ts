@@ -54,10 +54,36 @@ export class MainPage implements OnInit, OnDestroy {
   private messageService      = inject(MessageService);
 
   currentTruckDimensions: TruckDimensions = {
-    width: 2500, length: 12000, height: 4000,
+    width: 2500, length: 12000, height: 4000, weightKg: 8000, maxCapacityKg: 20000,
   };
 
   currentLayoutId: string | null = null;
+
+  get hasContainers(): boolean {
+    return this.container3DService.getContainers().length > 0;
+  }
+
+  get totalLoadedWeightKg(): number {
+    return this.container3DService.getContainers().reduce((sum, c) => {
+      const itemWeight = (c.itemCount ?? 0) * (c.itemWeightG ?? 0);
+      return sum + (c.weight + itemWeight) / 1000;
+    }, 0);
+  }
+
+  get totalTruckWeightKg(): number {
+    return (this.currentTruckDimensions.weightKg ?? 0) + this.totalLoadedWeightKg;
+  }
+
+  get capacityUsedPercent(): number {
+    const cap = this.currentTruckDimensions.maxCapacityKg ?? 0;
+    if (!cap) return 0;
+    return Math.min(100, Math.round((this.totalLoadedWeightKg / cap) * 100));
+  }
+
+  get isOverCapacity(): boolean {
+    const cap = this.currentTruckDimensions.maxCapacityKg ?? 0;
+    return cap > 0 && this.totalLoadedWeightKg > cap;
+  }
   isSavingContainers = false;
 
   algorithmOptions: AlgorithmOption[] = [
