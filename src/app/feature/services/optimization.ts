@@ -1,9 +1,10 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { Observable, Subject } from 'rxjs';
-import { GaWorkerRequest, GaWorkerMessage } from '../workers/ga.models';
-import { BPWorkerRequest, BPWorkerMessage } from '../workers/bin-packing.worker';
-import { MRWorkerRequest, MRWorkerMessage } from '../workers/maxrects.worker';
+import { Observable, Subject, Subscription } from 'rxjs';
 import { PackingOptions, DEFAULT_PACKING_OPTIONS, GaOptions } from '../../shared/models/packing-options.models';
+import { PackingStrategy } from './packing-strategy.interface';
+import { GaPackingStrategy } from './strategies/ga-packing.strategy';
+import { BinPackingStrategy } from './strategies/bin-packing.strategy';
+import { MaxRectsPackingStrategy } from './strategies/maxrects-packing.strategy';
 
 export type AlgorithmType = 'genetic' | 'binpacking' | 'maxrects';
 
@@ -35,12 +36,18 @@ export interface WorkerContainer {
 
 @Injectable({ providedIn: 'root' })
 export class OptimizationService implements OnDestroy {
-  private gaWorker: Worker | null = null;
-  private bpWorker: Worker | null = null;
-  private mrWorker: Worker | null = null;
+  private readonly strategies: Record<AlgorithmType, PackingStrategy> = {
+    genetic:    new GaPackingStrategy(),
+    binpacking: new BinPackingStrategy(),
+    maxrects:   new MaxRectsPackingStrategy(),
+  };
 
-  private progress$ = new Subject<OptimizationProgress>();
-  private result$   = new Subject<OptimizationResult>();
+  private activeStrategy: PackingStrategy | null = null;
+  private progressSub: Subscription | null = null;
+  private resultSub:   Subscription | null = null;
+
+  private readonly progress$ = new Subject<OptimizationProgress>();
+  private readonly result$   = new Subject<OptimizationResult>();
 
   private running = false;
 
@@ -75,145 +82,34 @@ export class OptimizationService implements OnDestroy {
     }
 
     this.cancel();
+
+    const strategy = this.strategies[algorithm];
+    this.activeStrategy = strategy;
     this.running = true;
 
-    if (algorithm === 'genetic') {
-      this.runGA({ containers, truckWidthMm, truckLengthMm, truckHeightMm, packingOptions, gaOptions });
-    } else if (algorithm === 'maxrects') {
-      this.runMaxRects({ containers, truckWidthMm, truckLengthMm, truckHeightMm, packingOptions });
-    } else {
-      this.runBP({ containers, truckWidthMm, truckLengthMm, truckHeightMm, packingOptions });
-    }
+    this.progressSub = strategy.progress$.subscribe((p) => this.progress$.next(p));
+
+    this.resultSub = strategy.result$.subscribe((r) => {
+      this.running = false;
+      this.activeStrategy = null;
+      this.progressSub?.unsubscribe();
+      this.resultSub?.unsubscribe();
+      this.progressSub = null;
+      this.resultSub   = null;
+      this.result$.next(r);
+    });
+
+    strategy.run({ containers, truckWidthMm, truckLengthMm, truckHeightMm, packingOptions, gaOptions });
   }
 
   cancel(): void {
-    this.gaWorker?.terminate();
-    this.bpWorker?.terminate();
-    this.mrWorker?.terminate();
-    this.gaWorker = null;
-    this.bpWorker = null;
-    this.mrWorker = null;
+    this.activeStrategy?.cancel();
+    this.progressSub?.unsubscribe();
+    this.resultSub?.unsubscribe();
+    this.progressSub = null;
+    this.resultSub   = null;
+    this.activeStrategy = null;
     this.running = false;
-  }
-
-  private runGA(request: GaWorkerRequest): void {
-    this.gaWorker = new Worker(
-      new URL('../workers/ga.worker', import.meta.url),
-      { type: 'module' },
-    );
-
-    this.gaWorker.addEventListener('message', ({ data }: MessageEvent<GaWorkerMessage>) => {
-      if (data.type === 'progress') {
-        this.progress$.next({
-          algorithm: 'genetic',
-          percent: Math.round((data.generation / data.totalGenerations) * 100),
-          label: `Generation ${data.generation} / ${data.totalGenerations}`,
-          detail: `Best fitness: ${data.bestFitness.toFixed(1)}  ·  Avg: ${data.avgFitness.toFixed(1)}`,
-          positions: data.positions,
-        });
-      } else if (data.type === 'result') {
-        this.running = false;
-        this.result$.next({
-          success: data.success,
-          positions: data.positions,
-          error: data.error,
-          summary: data.success ? `GA complete · fitness ${data.finalFitness?.toFixed(1)}` : undefined,
-        });
-        this.gaWorker?.terminate();
-        this.gaWorker = null;
-      }
-    });
-
-    this.gaWorker.addEventListener('error', (e: ErrorEvent) => {
-      this.running = false;
-      this.result$.next({ success: false, error: e.message });
-      this.gaWorker?.terminate();
-      this.gaWorker = null;
-    });
-
-    this.gaWorker.postMessage(request);
-  }
-
-  private runBP(request: BPWorkerRequest): void {
-    this.bpWorker = new Worker(
-      new URL('../workers/bin-packing.worker', import.meta.url),
-      { type: 'module' },
-    );
-
-    this.bpWorker.addEventListener('message', ({ data }: MessageEvent<BPWorkerMessage>) => {
-      if (data.type === 'progress') {
-        this.progress$.next({
-          algorithm: 'binpacking',
-          percent: Math.round((data.passIndex / data.totalPasses) * 100),
-          label: `Pass ${data.passIndex} / ${data.totalPasses}: ${data.strategyName}`,
-          detail: `Score: ${data.thisPassScore.toFixed(1)}  ·  Best so far: ${data.currentBestScore.toFixed(1)}`,
-          improved: data.improved,
-          positions: data.positions,
-        });
-      } else if (data.type === 'result') {
-        this.running = false;
-        this.result$.next({
-          success: data.success,
-          positions: data.positions,
-          error: data.error,
-          summary: data.success
-            ? `Best strategy: ${data.bestStrategy} · score ${data.bestScore?.toFixed(1)}`
-            : undefined,
-        });
-        this.bpWorker?.terminate();
-        this.bpWorker = null;
-      }
-    });
-
-    this.bpWorker.addEventListener('error', (e: ErrorEvent) => {
-      this.running = false;
-      this.result$.next({ success: false, error: e.message });
-      this.bpWorker?.terminate();
-      this.bpWorker = null;
-    });
-
-    this.bpWorker.postMessage(request);
-  }
-
-  private runMaxRects(request: MRWorkerRequest): void {
-    this.mrWorker = new Worker(
-      new URL('../workers/maxrects.worker', import.meta.url),
-      { type: 'module' },
-    );
-
-    this.mrWorker.addEventListener('message', ({ data }: MessageEvent<MRWorkerMessage>) => {
-      if (data.type === 'progress') {
-        this.progress$.next({
-          algorithm: 'maxrects',
-          percent: Math.round((data.passIndex / data.totalPasses) * 100),
-          label: `Pass ${data.passIndex} / ${data.totalPasses}: ${data.strategyName}`,
-          detail: `Score: ${data.thisPassScore.toFixed(1)}  ·  Best so far: ${data.currentBestScore.toFixed(1)}`,
-          improved: data.improved,
-          positions: data.positions,
-        });
-      } else if (data.type === 'result') {
-        this.running = false;
-        this.result$.next({
-          success: data.success,
-          positions: data.positions,
-          error: data.error,
-          summary: data.success
-            ? `Best strategy: ${data.bestStrategy} · score ${data.bestScore?.toFixed(1)}`
-            : undefined,
-        });
-        this.mrWorker?.terminate();
-        this.mrWorker = null;
-      }
-    });
-
-    this.mrWorker.addEventListener('error', (e: ErrorEvent) => {
-      this.running = false;
-      this.result$.next({ success: false, error: e.message });
-      this.mrWorker?.terminate();
-      this.mrWorker = null;
-    });
-
-    this.mrWorker.postMessage(request);
   }
 
   ngOnDestroy(): void {
