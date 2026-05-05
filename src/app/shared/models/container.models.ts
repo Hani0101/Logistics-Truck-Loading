@@ -9,7 +9,9 @@ export interface Container {
   width: number;
   length: number;
   height: number;
-  weight: number;
+  weight: number;       // tare weight of the container itself (g)
+  itemCount?: number;   // number of items packed inside each container
+  itemWeightG?: number; // weight of each item in grams
   amount: number;
   color?: string;
   position?: THREE.Vector3;

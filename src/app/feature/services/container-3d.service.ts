@@ -95,6 +95,8 @@ export class Container3DService {
         width, length, height,
         color: containerData.color,
         weight: containerData.weight,
+        itemCount: containerData.itemCount ?? 0,
+        itemWeightG: containerData.itemWeightG ?? 0,
         amount: 1,
         position: initialPosition,
         mesh,

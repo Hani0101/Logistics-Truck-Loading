@@ -87,6 +87,14 @@
       <input type="number" pInputText id="truck_height" [(ngModel)]="truckDimensions.height" />
       <label for="truck_height">Height (mm)</label>
     </p-floatlabel>
+    <p-floatlabel>
+      <input type="number" pInputText id="truck_weight" [(ngModel)]="truckDimensions.weightKg" min="0" />
+      <label for="truck_weight">Truck Weight / Tare (kg)</label>
+    </p-floatlabel>
+    <p-floatlabel>
+      <input type="number" pInputText id="truck_max_capacity" [(ngModel)]="truckDimensions.maxCapacityKg" min="0" />
+      <label for="truck_max_capacity">Max Payload Capacity (kg)</label>
+    </p-floatlabel>
   </div>
   <ng-template pTemplate="footer">
     <p-button (click)="updateTruck()" label="Update Truck" icon="pi pi-refresh" [fluid]="true" />
@@ -120,13 +128,58 @@
       <label for="container_height">Height (mm)</label>
     </p-floatlabel>
     <p-floatlabel>
-      <input type="number" pInputText id="container_weight" [(ngModel)]="containerDetails.weight" />
-      <label for="container_weight">Weight (g)</label>
+      <input type="number" pInputText id="container_weight" [(ngModel)]="containerDetails.weight" min="0" />
+      <label for="container_weight">Container Weight / Tare (g)</label>
     </p-floatlabel>
-    <p-floatlabel>
-      <input type="number" pInputText id="container_amount" [(ngModel)]="containerDetails.amount" />
-      <label for="container_amount">Amount</label>
-    </p-floatlabel>
+
+    <!-- Items inside container -->
+    <div class="items-section">
+      <p class="color-label">Items Inside Each Container</p>
+      <div class="items-inputs">
+        <p-floatlabel>
+          <input type="number" pInputText id="item_count" [(ngModel)]="containerDetails.itemCount" min="0" />
+          <label for="item_count">Item Count</label>
+        </p-floatlabel>
+        <p-floatlabel>
+          <input type="number" pInputText id="item_weight" [(ngModel)]="containerDetails.itemWeightG" min="0" />
+          <label for="item_weight">Weight per Item (g)</label>
+        </p-floatlabel>
+      </div>
+      <div class="weight-summary">
+        <div class="weight-row">
+          <span>Container tare</span>
+          <span>{{ containerDetails.weight }} g</span>
+        </div>
+        <div class="weight-row">
+          <span>Items ({{ containerDetails.itemCount ?? 0 }} × {{ containerDetails.itemWeightG ?? 0 }} g)</span>
+          <span>{{ totalItemWeightG }} g</span>
+        </div>
+        <div class="weight-row weight-total">
+          <span>Total per container</span>
+          <span>{{ totalWeightG }} g</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="amount-section">
+      <p-floatlabel>
+        <input type="number" pInputText id="container_amount" [(ngModel)]="containerDetails.amount" min="1" />
+        <label for="container_amount">Amount</label>
+      </p-floatlabel>
+      <p-button
+        (click)="fillTruck()"
+        label="Fill Truck"
+        icon="pi pi-th-large"
+        size="small"
+        [outlined]="true"
+        [fluid]="true"
+        [disabled]="maxFitCount === 0">
+      </p-button>
+      <span class="fill-hint">
+        Max fit: <strong>{{ maxFitCount }}</strong> container{{ maxFitCount !== 1 ? 's' : '' }}
+        (usable space: full width · 80% length · 90% height)
+      </span>
+    </div>
     @if (containerDetails.containerType === 'box') {
     <div class="color-field">
       <span class="color-label">Color</span>

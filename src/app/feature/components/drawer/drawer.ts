@@ -47,12 +47,33 @@ export class Drawer implements OnInit {
   /** Emits when the user deletes the active layout */
   @Output() layoutDeleted = new EventEmitter<void>();
 
-  truckDimensions: TruckDimensions = { width: 2500, length: 12000, height: 4000 };
+  truckDimensions: TruckDimensions = { width: 2500, length: 12000, height: 4000, weightKg: 8000, maxCapacityKg: 20000 };
 
   containerDetails: Container = {
     width: 1000, length: 1000, height: 1000,
-    weight: 1000, amount: 1, color: '3b82f6', containerType: 'box'
+    weight: 1000, amount: 1, color: '3b82f6', containerType: 'box',
+    itemCount: 0, itemWeightG: 0,
   };
+
+  get totalItemWeightG(): number {
+    return (this.containerDetails.itemCount ?? 0) * (this.containerDetails.itemWeightG ?? 0);
+  }
+
+  get totalWeightG(): number {
+    return this.containerDetails.weight + this.totalItemWeightG;
+  }
+
+  get maxFitCount(): number {
+    const { width: tw, length: tl, height: th } = this.truckDimensions;
+    const { width: cw, length: cl, height: ch } = this.containerDetails;
+    if (!cw || !cl || !ch) return 0;
+    return Math.floor(tw / cw) * Math.floor((tl * 0.8) / cl) * Math.floor((th * 0.9) / ch);
+  }
+
+  fillTruck(): void {
+    const count = this.maxFitCount;
+    if (count > 0) this.containerDetails.amount = count;
+  }
 
   newLayoutName = '';
   savedLayouts: LayoutSummary[] = [];
