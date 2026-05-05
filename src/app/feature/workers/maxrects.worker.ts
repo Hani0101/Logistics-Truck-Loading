@@ -64,11 +64,11 @@ interface OrderingStrategy {
   sort: (containers: MRContainer[]) => MRContainer[];
 }
 
-// ── Helpers (adapted from bin-packing.worker.ts) ──────────────────────────
+// Helpers (adapted from bin-packing.worker.ts)
 
 function cargoBox(wMm: number, lMm: number, hMm: number): TruckBox {
   const f = 0.001;
-  return { w: wMm * f, l: lMm * f * 0.7, h: hMm * f * 0.9 };
+  return { w: wMm * f, l: lMm * f * 0.8, h: hMm * f * 0.9 };
 }
 
 function applyGrouping(
@@ -211,7 +211,7 @@ function calcPackingScore(positions: Vec3[], containers: MRContainer[], truck: T
   return (usedVol / truckVol) * 500 + packScore * 0.5 + containers.length * 10;
 }
 
-// ── MaxRectsPacker ────────────────────────────────────────────────────────
+// MaxRectsPacker
 
 class MaxRectsPacker {
   private freeRects: FreeRect[];
@@ -431,7 +431,7 @@ class MaxRectsPacker {
   }
 }
 
-// ── Sorting strategies ────────────────────────────────────────────────────
+// Sorting strategies
 
 function buildStrategies(): OrderingStrategy[] {
   return [
@@ -472,7 +472,7 @@ function buildStrategies(): OrderingStrategy[] {
   ];
 }
 
-// ── Main entry ────────────────────────────────────────────────────────────
+//Main entry
 
 function runMaxRects(request: MRWorkerRequest): void {
   const { containers, truckWidthMm, truckLengthMm, truckHeightMm, packingOptions } = request;
