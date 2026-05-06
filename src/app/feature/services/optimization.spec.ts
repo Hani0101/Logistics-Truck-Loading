@@ -1,13 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 
-import { GaWorker } from './ga-worker';
+import { Optimization } from './optimization';
 
-describe('GaWorker', () => {
-  let service: GaWorker;
+describe('Optimization', () => {
+  let service: Optimization;
 
   beforeEach(() => {
     TestBed.configureTestingModule({});
-    service = TestBed.inject(GaWorker);
+    service = TestBed.inject(Optimization);
   });
 
   it('should be created', () => {

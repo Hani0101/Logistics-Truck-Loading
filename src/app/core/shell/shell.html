@@ -1,1 +1,15 @@
-<app-main-page></app-main-page>
+<nav class="app-nav">
+  <div class="nav-brand">
+    <i class="pi pi-truck"></i>
+    <span>LoadMaster</span>
+  </div>
+  <div class="nav-links">
+    <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
+      <i class="pi pi-box"></i> Optimizer
+    </a>
+    <a routerLink="/dispatch" routerLinkActive="active">
+      <i class="pi pi-send"></i> Dispatch
+    </a>
+  </div>
+</nav>
+<router-outlet></router-outlet>

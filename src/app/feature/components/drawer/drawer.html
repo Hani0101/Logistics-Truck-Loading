@@ -48,7 +48,8 @@
         optionValue="id"
         placeholder="Select layout..."
         [fluid]="true"
-        emptyMessage="No saved layouts">
+        emptyMessage="No saved layouts"
+        appendTo="body">
       </p-select>
       <p-button
         (click)="loadLayout()"

@@ -23,7 +23,6 @@
 
     <div class="sidebar-footer">
 
-      <!-- Save current 3-D positions back to the API -->
       <p-button
         (click)="saveCurrentScene()"
         label="Save Scene"
@@ -31,18 +30,189 @@
         [fluid]="true"
         severity="secondary"
         [outlined]="true"
-        [loading]="isSavingContainers"
-        styleClass="mb-2">
+        [loading]="isSavingContainers">
       </p-button>
 
-      <!-- Run optimization -->
-      <p-button
-        (click)="runOptimization()"
-        label="Run Optimization"
-        icon="pi pi-play"
-        [fluid]="true"
-        [loading]="isOptimizing">
-      </p-button>
+      <div class="section-divider"></div>
+
+      <div class="algo-section">
+        <p class="section-label">Algorithm</p>
+        <p-select
+          [(ngModel)]="selectedAlgorithm"
+          [options]="algorithmOptions"
+          optionLabel="label"
+          optionValue="value"
+          [fluid]="true"
+          [disabled]="isOptimizing">
+          <ng-template #selectedItem let-selected>
+            <div class="algo-option" *ngIf="selected">
+              <i [class]="selected.icon"></i>
+              <span>{{ selected.label }}</span>
+            </div>
+          </ng-template>
+          <ng-template #item let-option>
+            <div class="algo-option">
+              <i [class]="option.icon"></i>
+              <div class="algo-option-text">
+                <span class="algo-option-label">{{ option.label }}</span>
+                <span class="algo-option-desc">{{ option.desc }}</span>
+              </div>
+            </div>
+          </ng-template>
+        </p-select>
+      </div>
+
+      <div class="section-divider"></div>
+
+      @if (selectedAlgorithm === 'genetic') {
+        <div class="ga-params">
+          <p class="section-label">GA Parameters</p>
+
+          <div class="param-row">
+            <label class="param-label">Selection Method</label>
+            <p-select
+              [(ngModel)]="gaOptions.selectionMethod"
+              [options]="selectionMethodOptions"
+              optionLabel="label"
+              optionValue="value"
+              [fluid]="true"
+              [disabled]="isOptimizing">
+              <ng-template #selectedItem let-selected>
+                <span *ngIf="selected">{{ selected.label }}</span>
+              </ng-template>
+              <ng-template #item let-option>
+                <div class="selection-option">
+                  <span class="selection-option-label">{{ option.label }}</span>
+                  <span class="selection-option-desc">{{ option.desc }}</span>
+                </div>
+              </ng-template>
+            </p-select>
+          </div>
+
+          <div class="param-row">
+            <label class="param-label">Population Size</label>
+            <p-inputnumber
+              [(ngModel)]="gaOptions.populationSize"
+              [min]="10" [max]="500" [step]="10"
+              [showButtons]="true"
+              buttonLayout="horizontal"
+              [fluid]="true"
+              [disabled]="isOptimizing">
+            </p-inputnumber>
+          </div>
+
+          <div class="param-row">
+            <label class="param-label">Generations</label>
+            <p-inputnumber
+              [(ngModel)]="gaOptions.generations"
+              [min]="10" [max]="1000" [step]="10"
+              [showButtons]="true"
+              buttonLayout="horizontal"
+              [fluid]="true"
+              [disabled]="isOptimizing">
+            </p-inputnumber>
+          </div>
+
+          <div class="param-row">
+            <label class="param-label">Mutation Rate</label>
+            <p-inputnumber
+              [(ngModel)]="gaOptions.mutationRate"
+              [min]="0.01" [max]="0.5" [step]="0.01"
+              [minFractionDigits]="2" [maxFractionDigits]="2"
+              [showButtons]="true"
+              buttonLayout="horizontal"
+              [fluid]="true"
+              [disabled]="isOptimizing">
+            </p-inputnumber>
+          </div>
+
+          <div class="param-row">
+            <label class="param-label">Crossover Rate</label>
+            <p-inputnumber
+              [(ngModel)]="gaOptions.crossoverRate"
+              [min]="0.5" [max]="1.0" [step]="0.01"
+              [minFractionDigits]="2" [maxFractionDigits]="2"
+              [showButtons]="true"
+              buttonLayout="horizontal"
+              [fluid]="true"
+              [disabled]="isOptimizing">
+            </p-inputnumber>
+          </div>
+
+          @if (gaOptions.selectionMethod === 'tournament') {
+            <div class="param-row">
+              <label class="param-label">Tournament Size</label>
+              <p-inputnumber
+                [(ngModel)]="gaOptions.tournamentSize"
+                [min]="2" [max]="20" [step]="1"
+                [showButtons]="true"
+                buttonLayout="horizontal"
+                [fluid]="true"
+                [disabled]="isOptimizing">
+              </p-inputnumber>
+            </div>
+          }
+
+          <div class="param-row">
+            <label class="param-label">Elitism Count</label>
+            <p-inputnumber
+              [(ngModel)]="gaOptions.elitismCount"
+              [min]="0" [max]="20" [step]="1"
+              [showButtons]="true"
+              buttonLayout="horizontal"
+              [fluid]="true"
+              [disabled]="isOptimizing">
+            </p-inputnumber>
+          </div>
+        </div>
+
+        <div class="section-divider"></div>
+      }
+
+      <div class="packing-options">
+        <p class="section-label">Packing Rules</p>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-label">Group same type</span>
+            <span class="toggle-desc">Keep identical containers together</span>
+          </div>
+          <p-toggleSwitch
+            [(ngModel)]="packingOptions.groupSameType"
+            [disabled]="isOptimizing">
+          </p-toggleSwitch>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-label">Mixed stacking</span>
+            <span class="toggle-desc">Stack different types on each other</span>
+          </div>
+          <p-toggleSwitch
+            [(ngModel)]="packingOptions.allowMixedStacking"
+            [disabled]="isOptimizing">
+          </p-toggleSwitch>
+        </div>
+      </div>
+
+      <div class="run-row">
+        <p-button
+          (click)="runOptimization()"
+          label="Run"
+          icon="pi pi-play"
+          [fluid]="true"
+          [loading]="isOptimizing"
+          [disabled]="isOptimizing">
+        </p-button>
+        @if (isOptimizing) {
+          <p-button
+            (click)="cancelOptimization()"
+            icon="pi pi-times"
+            severity="danger"
+            [outlined]="true">
+          </p-button>
+        }
+      </div>
 
     </div>
   </aside>
@@ -59,6 +229,30 @@
         <span class="hint">Scroll to zoom · Drag to orbit</span>
       </div>
     </div>
+
+    @if (isOptimizing && optimizationProgress) {
+      <div class="progress-panel">
+        <div class="progress-header">
+          <i class="pi pi-spin pi-spinner"></i>
+          <span class="progress-algo-tag">
+            {{ optimizationProgress.algorithm === 'genetic' ? 'Genetic Algorithm' : 'Bin Packing' }}
+          </span>
+          <span class="progress-pct">{{ optimizationProgress.percent }}%</span>
+        </div>
+        <p-progressBar
+          [value]="optimizationProgress.percent"
+          [showValue]="false"
+          [style]="{ height: '6px' }">
+        </p-progressBar>
+        <p class="progress-label">{{ optimizationProgress.label }}</p>
+        @if (optimizationProgress.detail) {
+          <p class="progress-detail" [class.improved]="optimizationProgress.improved">
+            {{ optimizationProgress.detail }}
+          </p>
+        }
+      </div>
+    }
+
     <div class="viewport-canvas">
       <app-3d-view [truckDimensions]="currentTruckDimensions"></app-3d-view>
     </div>

@@ -45,6 +45,5 @@ Thumbs.db
 
 # Personal files
 todo
-environments/environment.ts
-environments/environment.prod.ts
+/environments/*.ts
 

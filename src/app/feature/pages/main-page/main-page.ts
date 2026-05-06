@@ -1,43 +1,134 @@
-import { Component, inject, OnDestroy, ViewChild } from '@angular/core';
+import { Component, inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { Drawer } from '../../components/drawer/drawer';
 import { ThreeDView } from '../../components/3d-view/3d-view';
 import { TruckDimensions } from '../../../shared/models/truck.models';
 import { Container3DService } from '../../services/container-3d.service';
 import { LayoutService } from '../../services/layout';
-import { GaWorkerService } from '../../services/ga-worker';
+import { OptimizationService, AlgorithmType, OptimizationProgress } from '../../services/optimization';
+import { PackingOptions, DEFAULT_PACKING_OPTIONS, GaOptions, DEFAULT_GA_OPTIONS, SelectionMethod } from '../../../shared/models/packing-options.models';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { ToastModule } from 'primeng/toast';
+import { SelectModule } from 'primeng/select';
+import { ToggleSwitchModule } from 'primeng/toggleswitch';
+import { InputNumberModule } from 'primeng/inputnumber';
+import { ProgressBarModule } from 'primeng/progressbar';
+import { TooltipModule } from 'primeng/tooltip';
 import { MessageService } from 'primeng/api';
 import { Container } from '../../../shared/models/container.models';
 import { Subscription } from 'rxjs';
 import * as THREE from 'three';
 
+interface AlgorithmOption {
+  label: string;
+  value: AlgorithmType;
+  icon: string;
+  desc: string;
+}
+
+interface SelectionMethodOption {
+  label: string;
+  value: SelectionMethod;
+  desc: string;
+}
+
 @Component({
   selector: 'app-main-page',
   standalone: true,
-  imports: [Drawer, ThreeDView, CommonModule, ButtonModule, ToastModule],
+  imports: [
+    Drawer, ThreeDView, CommonModule, FormsModule,
+    ButtonModule, ToastModule, SelectModule, ProgressBarModule,
+    ToggleSwitchModule, TooltipModule, InputNumberModule,
+  ],
   providers: [MessageService],
   templateUrl: './main-page.html',
   styleUrls: ['./main-page.scss'],
 })
-export class MainPage implements OnDestroy {
+export class MainPage implements OnInit, OnDestroy {
   @ViewChild(ThreeDView) threeDView!: ThreeDView;
 
-  private container3DService = inject(Container3DService);
-  private layoutService      = inject(LayoutService);
-  private gaWorkerService    = inject(GaWorkerService);
-  private messageService     = inject(MessageService);
+  private container3DService  = inject(Container3DService);
+  private layoutService       = inject(LayoutService);
+  private optimizationService = inject(OptimizationService);
+  private messageService      = inject(MessageService);
 
   currentTruckDimensions: TruckDimensions = {
     width: 2500, length: 12000, height: 4000,
   };
 
   currentLayoutId: string | null = null;
-  isOptimizing     = false;
   isSavingContainers = false;
 
-  private gaSub: Subscription | null = null;
+  algorithmOptions: AlgorithmOption[] = [
+    { label: 'Genetic Algorithm', value: 'genetic', icon: 'pi pi-sitemap', desc: '150 generations, evolutionary' },
+    { label: 'Bin Packing (BLF)', value: 'binpacking', icon: 'pi pi-th-large', desc: '12 passes, deterministic + random' },
+  ];
+  selectedAlgorithm: AlgorithmType = 'binpacking';
+
+  packingOptions: PackingOptions = { ...DEFAULT_PACKING_OPTIONS };
+
+  gaOptions: GaOptions = { ...DEFAULT_GA_OPTIONS };
+
+  selectionMethodOptions: SelectionMethodOption[] = [
+    { label: 'Tournament', value: 'tournament', desc: 'Pick best from random sample' },
+    { label: 'Roulette Wheel', value: 'roulette', desc: 'Fitness-proportional probability' },
+    { label: 'Rank', value: 'rank', desc: 'Rank-proportional probability' },
+    { label: 'Elitism', value: 'elitism', desc: 'Select from top 20% only' },
+  ];
+
+  isOptimizing = false;
+  optimizationProgress: OptimizationProgress | null = null;
+
+  private subs: Subscription[] = [];
+
+  ngOnInit(): void {
+    this.subs.push(
+      this.optimizationService.progress.subscribe((p) => {
+        this.optimizationProgress = p;
+
+        if (p.positions?.length) {
+          p.positions.forEach(({ id, position }) => {
+            this.container3DService.updateSingleContainerPosition(
+              id, new THREE.Vector3(position.x, position.y, position.z),
+            );
+          });
+        }
+      }),
+    );
+
+    this.subs.push(
+      this.optimizationService.result.subscribe((r) => {
+        this.isOptimizing = false;
+        this.optimizationProgress = null;
+
+        if (!r.success || !r.positions) {
+          this.messageService.add({
+            severity: 'error', summary: 'Optimisation failed',
+            detail: r.error ?? 'Unknown error.', life: 4000,
+          });
+          return;
+        }
+
+        r.positions.forEach(({ id, position }) => {
+          this.container3DService.updateSingleContainerPosition(
+            id, new THREE.Vector3(position.x, position.y, position.z),
+          );
+        });
+
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Optimisation complete',
+          detail: r.summary,
+          life: 3500,
+        });
+
+        if (this.currentLayoutId) {
+          this.asyncSave(this.currentLayoutId);
+        }
+      }),
+    );
+  }
 
   onTruckDimensionsChanged(dimensions: TruckDimensions): void {
     this.currentTruckDimensions = { ...dimensions };
@@ -93,7 +184,7 @@ export class MainPage implements OnDestroy {
       return;
     }
 
-    if (!this.gaWorkerService.isSupported) {
+    if (!this.optimizationService.isSupported) {
       this.messageService.add({
         severity: 'error', summary: 'Web Workers not supported',
         detail: 'Please use a modern browser.',
@@ -103,61 +194,29 @@ export class MainPage implements OnDestroy {
 
     const launchWorker = () => {
       this.isOptimizing = true;
+      this.optimizationProgress = null;
 
       const containers = this.container3DService.getContainers().map((c) => ({
-        id:     c.id!,
-        width:  c.width,
-        length: c.length,
-        height: c.height,
-        weight: c.weight,
-        color:  c.color,
+        id:      c.id!,
+        groupId: c.groupId,
+        width:   c.width,
+        length:  c.length,
+        height:  c.height,
+        weight:  c.weight,
+        color:   c.color,
       }));
 
-      this.gaSub?.unsubscribe();
-      this.gaSub = this.gaWorkerService
-        .run({
-          containers,
-          truckWidthMm:  this.currentTruckDimensions.width,
-          truckLengthMm: this.currentTruckDimensions.length,
-          truckHeightMm: this.currentTruckDimensions.height,
-        })
-        .subscribe({
-          next: (result) => {
-            this.isOptimizing = false;
-
-            if (!result.success || !result.positions) {
-              this.messageService.add({
-                severity: 'error', summary: 'Optimisation failed',
-                detail: result.error ?? 'Unknown error in worker.',
-              });
-              return;
-            }
-
-            // Apply positions to the scene, happens on the main thread,
-            // but the heavy computation is already done
-            result.positions.forEach(({ id, position }) => {
-              this.container3DService.updateSingleContainerPosition(
-                id, new THREE.Vector3(position.x, position.y, position.z)
-              );
-            });
-
-            this.messageService.add({
-              severity: 'success', summary: 'Optimisation complete', life: 2500,
-            });
-
-            // Persist optimised positions asynchronously, user doesn't wait
-            this.asyncSave(this.currentLayoutId!);
-          },
-          error: (err) => {
-            this.isOptimizing = false;
-            this.messageService.add({
-              severity: 'error', summary: 'Worker error', detail: String(err),
-            });
-          },
-        });
+      this.optimizationService.run(
+        this.selectedAlgorithm,
+        containers,
+        this.currentTruckDimensions.width,
+        this.currentTruckDimensions.length,
+        this.currentTruckDimensions.height,
+        this.packingOptions,
+        this.selectedAlgorithm === 'genetic' ? this.gaOptions : undefined,
+      );
     };
 
-    // If IDs haven't been synced yet (no sync save done), do it first
     const containers = this.container3DService.getContainers();
     const idsNotSynced = containers.some((c) => c.id?.startsWith('container-'));
 
@@ -166,6 +225,13 @@ export class MainPage implements OnDestroy {
     } else {
       launchWorker();
     }
+  }
+
+  cancelOptimization(): void {
+    this.optimizationService.cancel();
+    this.isOptimizing = false;
+    this.optimizationProgress = null;
+    this.messageService.add({ severity: 'info', summary: 'Cancelled', life: 1500 });
   }
 
   private syncSaveAndRegisterIds(layoutId: string, onDone?: () => void): void {
@@ -194,13 +260,14 @@ export class MainPage implements OnDestroy {
       error: () => {
         this.messageService.add({
           severity: 'warn', summary: 'Background save failed',
-          detail: 'Positions may not be persisted. Is the API running?', life: 4000,
+          detail: 'Positions may not be persisted.', life: 4000,
         });
       },
     });
   }
 
   ngOnDestroy(): void {
-    this.gaSub?.unsubscribe();
+    this.subs.forEach((s) => s.unsubscribe());
+    this.optimizationService.cancel();
   }
 }
