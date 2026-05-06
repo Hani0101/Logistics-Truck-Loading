@@ -7,7 +7,7 @@ import { Truck3DService } from '../../services/truck-3d.service';
 import { Container3DService } from '../../services/container-3d.service';
 import { TruckDimensions } from '../../../shared/models/truck.models';
 import { Container } from '../../../shared/models/container.models';
-
+import { CrateLoaderService } from '../../services/crate-loader.service';
 @Component({
   selector: 'app-3d-view',
   standalone: true,
@@ -23,6 +23,7 @@ export class ThreeDView implements AfterViewInit, OnDestroy, OnChanges {
 
   private truck3DService = inject(Truck3DService);
   private container3DService = inject(Container3DService);
+  private crateLoader = inject(CrateLoaderService);
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
 
@@ -34,6 +35,8 @@ export class ThreeDView implements AfterViewInit, OnDestroy, OnChanges {
     // Defer heavy Three.js init off the first paint to improve LCP
     requestAnimationFrame(() => {
       this.truck3DService.initializeScene(this.threeDContainer);
+      this.crateLoader.preload('crate').catch(() => {});
+      this.crateLoader.preload('wooden-crate').catch(() => {});
       this.container3DService.initialize(
         this.truck3DService.getScene(),
         this.truck3DService.getCamera(),
@@ -83,8 +86,8 @@ export class ThreeDView implements AfterViewInit, OnDestroy, OnChanges {
     this.container3DService.endDrag();
   }
 
-  addContainer(containerData: Container): void {
-    this.container3DService.addContainer(containerData);
+  addContainer(containerData: Container): Promise<Container[]> {
+    return  this.container3DService.addContainer(containerData);
   }
 
   private updateRaycaster(event: MouseEvent): void {

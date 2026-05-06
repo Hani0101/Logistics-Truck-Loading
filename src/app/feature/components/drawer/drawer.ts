@@ -8,7 +8,8 @@ import { SelectModule } from 'primeng/select';
 import { ColorPickerModule } from 'primeng/colorpicker';
 import { CommonModule } from '@angular/common';
 import { TruckDimensions } from '../../../shared/models/truck.models';
-import { Container } from '../../../shared/models/container.models';
+import { Container, ContainerType } from '../../../shared/models/container.models';
+import { SelectButton } from 'primeng/selectbutton';
 import { LayoutService, LayoutSummary } from '../../services/layout';
 
 @Component({
@@ -16,7 +17,7 @@ import { LayoutService, LayoutSummary } from '../../services/layout';
   standalone: true,
   imports: [
     DrawerModule, ButtonModule, FloatLabelModule, FormsModule,
-    InputTextModule, SelectModule, ColorPickerModule, CommonModule,
+    InputTextModule, SelectModule, ColorPickerModule, CommonModule, SelectButton,
   ],
   templateUrl: './drawer.html',
   styleUrl: './drawer.scss',
@@ -28,13 +29,19 @@ export class Drawer implements OnInit {
   createTruck = false;
   saveVisible = false;
 
+  containerTypeOptions = [
+    { label: 'Simple Box',    value: 'box' },
+    { label: 'Plastic Crate', value: 'crate' },
+    { label: 'Wooden Crate',  value: 'wooden-crate' },
+  ];
+
   @Output() truckDimensionsChanged = new EventEmitter<TruckDimensions>();
   @Output() containerAdded = new EventEmitter<Container>();
 
-  /** Emits after a new layout is created — passes the new layout id */
+  /** Emits after a new layout is created, passes the new layout id */
   @Output() layoutSaved = new EventEmitter<string>();
 
-  /** Emits when the user picks a layout to load — passes the layout id */
+  /** Emits when the user picks a layout to load, passes the layout id */
   @Output() layoutLoadRequested = new EventEmitter<string>();
 
   /** Emits when the user deletes the active layout */
@@ -44,7 +51,7 @@ export class Drawer implements OnInit {
 
   containerDetails: Container = {
     width: 1000, length: 1000, height: 1000,
-    weight: 1000, amount: 1, color: '3b82f6',
+    weight: 1000, amount: 1, color: '3b82f6', containerType: 'box'
   };
 
   newLayoutName = '';
@@ -136,4 +143,17 @@ export class Drawer implements OnInit {
       error: () => {},
     });
   }
+
+  onContainerTypeChange(type: ContainerType): void {
+    if (type === 'crate') {
+      this.containerDetails.width  = 600;
+      this.containerDetails.length = 400;
+      this.containerDetails.height = 300;
+    } else if (type === 'wooden-crate') {
+      this.containerDetails.width  = 800;
+      this.containerDetails.length = 600;
+      this.containerDetails.height = 600;
+    }
+  }
+
 }

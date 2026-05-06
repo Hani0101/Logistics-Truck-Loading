@@ -235,7 +235,7 @@
         <div class="progress-header">
           <i class="pi pi-spin pi-spinner"></i>
           <span class="progress-algo-tag">
-            {{ optimizationProgress.algorithm === 'genetic' ? 'Genetic Algorithm' : 'Bin Packing' }}
+            {{ getAlgorithmLabel(optimizationProgress.algorithm) }}
           </span>
           <span class="progress-pct">{{ optimizationProgress.percent }}%</span>
         </div>

@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { TruckDimensions } from '../../shared/models/truck.models';
 import { Truck3DService } from './truck-3d.service';
+import { CrateLoaderService } from './crate-loader.service';
 import { Chromosome } from '../../shared/models/genetic.models';
 import { Container } from '../../shared/models/container.models';
 import { ContainerPayload } from './layout';
@@ -20,7 +21,10 @@ export class Container3DService {
   private truckDimensions!: TruckDimensions;
   private camera!: THREE.Camera;
 
-  constructor(private truck3DService: Truck3DService) {}
+  constructor(
+    private truck3DService: Truck3DService,
+    private crateLoader: CrateLoaderService,
+  ) {}
 
   initialize(scene: THREE.Scene, camera: THREE.Camera, truckDimensions: TruckDimensions): void {
     this.scene = scene;
@@ -28,41 +32,56 @@ export class Container3DService {
     this.truckDimensions = truckDimensions;
   }
 
-  addContainer(containerData: Container): Container[] {
+  async addContainer(containerData: Container): Promise<Container[]> {
     const scaleFactor = 0.001;
     const width  = containerData.width  * scaleFactor;
     const length = containerData.length * scaleFactor;
     const height = containerData.height * scaleFactor;
 
-    const geometry = new THREE.BoxGeometry(width, height, length);
     const results: Container[] = [];
+    const isModel = containerData.containerType !== 'box' && containerData.containerType != null;
 
     // All containers from the same addContainer call share a groupId
     const groupId = `group-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 
+    if (isModel) {
+      await this.crateLoader.preload(containerData.containerType);
+    }
+
+    const geometry = isModel ? null : new THREE.BoxGeometry(width, height, length);
+
     for (let i = 0; i < containerData.amount; i++) {
       const id = `container-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      let mesh: THREE.Mesh | THREE.Group;
+      let originalMaterial: THREE.MeshStandardMaterial | undefined;
 
-      const material = new THREE.MeshStandardMaterial({
-        color: containerData.color ? parseInt(containerData.color.replace('#', ''), 16) : 0x3b82f6,
-        metalness: 0.3,
-        roughness: 0.4,
-        transparent: true,
-        opacity: 0.8,
-      });
-
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.add(
-        new THREE.LineSegments(
-          new THREE.EdgesGeometry(geometry),
-          new THREE.LineBasicMaterial({
-            color: containerData.color ? parseInt(containerData.color.replace('#', ''), 16) : 0x3b82f6,
-            linewidth: 2,
-          })
-        )
-      );
+      if (isModel) {
+        mesh = this.crateLoader.cloneAndScale(containerData.containerType!, containerData.width, containerData.length, containerData.height);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      } else {
+        const material = new THREE.MeshStandardMaterial({
+          color: containerData.color ? parseInt(containerData.color.replace('#', ''), 16) : 0x3b82f6,
+          metalness: 0.3,
+          roughness: 0.4,
+          transparent: true,
+          opacity: 0.8,
+        });
+        const boxMesh = new THREE.Mesh(geometry!, material);
+        boxMesh.castShadow = true;
+        boxMesh.receiveShadow = true;
+        boxMesh.add(
+          new THREE.LineSegments(
+            new THREE.EdgesGeometry(geometry!),
+            new THREE.LineBasicMaterial({
+              color: containerData.color ? parseInt(containerData.color.replace('#', ''), 16) : 0x3b82f6,
+              linewidth: 2,
+            })
+          )
+        );
+        originalMaterial = material;
+        mesh = boxMesh;
+      }
 
       const initialPosition = new THREE.Vector3(i * (width + 0.05), height / 2, 0);
       mesh.position.copy(initialPosition);
@@ -72,13 +91,14 @@ export class Container3DService {
       const container: Container = {
         id,
         groupId,
+        containerType: containerData.containerType ?? 'box',
         width, length, height,
         color: containerData.color,
         weight: containerData.weight,
         amount: 1,
         position: initialPosition,
         mesh,
-        originalMaterial: material,
+        originalMaterial,
       };
 
       this.containers.set(id, container);
@@ -123,12 +143,17 @@ export class Container3DService {
     this.containers = newMap;
   }
 
-  rebuildFromLayout(apiContainers: (ContainerPayload & { id: string })[]): void {
+  async rebuildFromLayout(apiContainers: (ContainerPayload & { id: string })[]): Promise<void> {
     this.clear();
 
-    // Infer groupId from matching dimensions + color
+    const modelTypes = [...new Set(
+      apiContainers.filter((c) => c.containerType && c.containerType !== 'box').map((c) => c.containerType!)
+    )];
+    await Promise.all(modelTypes.map((t) => this.crateLoader.preload(t)));
+
+    // Infer groupId from matching dimensions + color + type
     const groupKey = (c: ContainerPayload) =>
-      `${c.width.toFixed(6)}_${c.length.toFixed(6)}_${c.height.toFixed(6)}_${c.color ?? ''}`;
+      `${c.width.toFixed(6)}_${c.length.toFixed(6)}_${c.height.toFixed(6)}_${c.color ?? ''}_${c.containerType ?? 'box'}`;
     const groupMap = new Map<string, string>();
 
     for (const c of apiContainers) {
@@ -137,21 +162,32 @@ export class Container3DService {
         groupMap.set(key, `group-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`);
       }
 
-      const colorHex = c.color ? parseInt(c.color.replace('#', ''), 16) : 0x3b82f6;
-      const geometry = new THREE.BoxGeometry(c.width, c.height, c.length);
-      const material = new THREE.MeshStandardMaterial({
-        color: colorHex, metalness: 0.3, roughness: 0.4, transparent: true, opacity: 0.8,
-      });
+      const isModel = c.containerType && c.containerType !== 'box';
+      let mesh: THREE.Mesh | THREE.Group;
+      let originalMaterial: THREE.MeshStandardMaterial | undefined;
 
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.add(
-        new THREE.LineSegments(
-          new THREE.EdgesGeometry(geometry),
-          new THREE.LineBasicMaterial({ color: colorHex, linewidth: 2 })
-        )
-      );
+      if (isModel) {
+        mesh = this.crateLoader.cloneAndScale(c.containerType!, c.width, c.length, c.height);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      } else {
+        const colorHex = c.color ? parseInt(c.color.replace('#', ''), 16) : 0x3b82f6;
+        const geometry = new THREE.BoxGeometry(c.width, c.height, c.length);
+        const material = new THREE.MeshStandardMaterial({
+          color: colorHex, metalness: 0.3, roughness: 0.4, transparent: true, opacity: 0.8,
+        });
+        const boxMesh = new THREE.Mesh(geometry, material);
+        boxMesh.castShadow = true;
+        boxMesh.receiveShadow = true;
+        boxMesh.add(
+          new THREE.LineSegments(
+            new THREE.EdgesGeometry(geometry),
+            new THREE.LineBasicMaterial({ color: colorHex, linewidth: 2 })
+          )
+        );
+        originalMaterial = material;
+        mesh = boxMesh;
+      }
 
       const pos = c.position
         ? new THREE.Vector3(c.position.x, c.position.y, c.position.z)
@@ -164,9 +200,10 @@ export class Container3DService {
       this.containers.set(c.id, {
         id: c.id,
         groupId: groupMap.get(key),
+        containerType: c.containerType ?? 'box',
         width: c.width, length: c.length, height: c.height,
         color: c.color, weight: c.weight, amount: 1,
-        position: pos, mesh, originalMaterial: material,
+        position: pos, mesh, originalMaterial,
       });
     }
   }
@@ -183,13 +220,14 @@ export class Container3DService {
     return Array.from(this.containers.values()).map((c) => ({
       width: c.width, length: c.length, height: c.height,
       weight: c.weight, amount: c.amount, color: c.color,
+      containerType: c.containerType,
       position: c.position
         ? { x: c.position.x, y: c.position.y, z: c.position.z }
         : undefined,
     }));
   }
 
-  startDrag(event: MouseEvent, containerMesh: THREE.Mesh, camera: THREE.Camera): void {
+  startDrag(event: MouseEvent, containerMesh: THREE.Object3D, camera: THREE.Camera): void {
     const containerId = containerMesh.userData['containerId'];
     const container = this.containers.get(containerId);
     if (!container?.position) return;
@@ -228,15 +266,15 @@ export class Container3DService {
   }
 
   selectContainer(container: Container): void {
-    if (!container.mesh) return;
-    const mat = container.mesh.material as THREE.MeshStandardMaterial;
+    if (!container.mesh || container.containerType !== 'box') return;
+    const mat = (container.mesh as THREE.Mesh).material as THREE.MeshStandardMaterial;
     mat.emissive.setHex(0xffd700);
     mat.emissiveIntensity = 0.4;
   }
 
   deselectContainer(container: Container): void {
-    if (!container?.mesh) return;
-    const mat = container.mesh.material as THREE.MeshStandardMaterial;
+    if (!container?.mesh || container.containerType !== 'box') return;
+    const mat = (container.mesh as THREE.Mesh).material as THREE.MeshStandardMaterial;
     mat.emissive.setHex(0x000000);
     mat.emissiveIntensity = 0;
   }
@@ -293,13 +331,13 @@ export class Container3DService {
     return Array.from(this.containers.values());
   }
 
-  getContainerAt(raycaster: THREE.Raycaster): THREE.Mesh | null {
+  getContainerAt(raycaster: THREE.Raycaster): THREE.Object3D | null {
     const meshes = Array.from(this.containers.values()).map((c) => c.mesh!);
     const intersects = raycaster.intersectObjects(meshes, true);
     if (!intersects.length) return null;
-    let obj = intersects[0].object;
-    while (obj && !obj.userData['containerId']) obj = obj.parent as THREE.Mesh;
-    return obj as THREE.Mesh | null;
+    let obj: THREE.Object3D = intersects[0].object;
+    while (obj && !obj.userData['containerId']) obj = obj.parent!;
+    return obj ?? null;
   }
 
   updateLayout(layout: Chromosome): void {
