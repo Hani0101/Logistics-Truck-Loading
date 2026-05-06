@@ -59,7 +59,7 @@ interface OrderingStrategy {
 
 function cargoBox(wMm: number, lMm: number, hMm: number): TruckBox {
   const f = 0.001;
-  return { w: wMm * f, l: lMm * f * 0.7, h: hMm * f * 0.9 };
+  return { w: wMm * f, l: lMm * f * 0.8, h: hMm * f * 0.9 };
 }
 
 function applyGrouping(
