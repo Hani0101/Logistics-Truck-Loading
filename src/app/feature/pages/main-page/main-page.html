@@ -221,6 +221,10 @@
     <div class="viewport-bar">
       <span>3D Viewport</span>
       <div class="viewport-bar-right">
+        <div class="heatmap-toggle">
+          <span class="heatmap-toggle-label">Weight Heat Map</span>
+          <p-toggleSwitch [(ngModel)]="showHeatMap" (ngModelChange)="onHeatMapToggle($event)" />
+        </div>
         @if (currentLayoutId) {
           <span class="layout-id-badge">
             <i class="pi pi-link"></i> layout synced
@@ -296,6 +300,13 @@
 
     <div class="viewport-canvas">
       <app-3d-view [truckDimensions]="currentTruckDimensions"></app-3d-view>
+      @if (showHeatMap) {
+        <div class="heatmap-legend">
+          <span class="legend-label">Low</span>
+          <div class="legend-gradient"></div>
+          <span class="legend-label">High</span>
+        </div>
+      }
     </div>
   </main>
 

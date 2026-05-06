@@ -5,9 +5,11 @@ import {
 import * as THREE from 'three';
 import { Truck3DService } from '../../services/truck-3d.service';
 import { Container3DService } from '../../services/container-3d.service';
+import { HeatMapService } from '../../services/heat-map.service';
 import { TruckDimensions } from '../../../shared/models/truck.models';
 import { Container } from '../../../shared/models/container.models';
 import { CrateLoaderService } from '../../services/crate-loader.service';
+
 @Component({
   selector: 'app-3d-view',
   standalone: true,
@@ -23,11 +25,16 @@ export class ThreeDView implements AfterViewInit, OnDestroy, OnChanges {
 
   private truck3DService = inject(Truck3DService);
   private container3DService = inject(Container3DService);
+  private heatMapService = inject(HeatMapService);
   private crateLoader = inject(CrateLoaderService);
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
 
   private readonly defaultDimensions: TruckDimensions = { width: 2500, length: 12000, height: 4000 };
+
+  private get truck(): TruckDimensions {
+    return this.truckDimensions ?? this.defaultDimensions;
+  }
 
   ngAfterViewInit(): void {
     if (!this.threeDContainer) return;
@@ -40,20 +47,22 @@ export class ThreeDView implements AfterViewInit, OnDestroy, OnChanges {
       this.container3DService.initialize(
         this.truck3DService.getScene(),
         this.truck3DService.getCamera(),
-        this.truckDimensions ?? this.defaultDimensions,
+        this.truck,
       );
-      this.truck3DService.createTruck(this.truckDimensions ?? this.defaultDimensions);
+      this.truck3DService.createTruck(this.truck);
       this.isLoading = false;
     });
   }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['truckDimensions'] && !changes['truckDimensions'].firstChange) {
-      this.truck3DService.createTruck(this.truckDimensions ?? this.defaultDimensions);
+      this.truck3DService.createTruck(this.truck);
+      this.heatMapService.refresh(this.truck);
     }
   }
 
   ngOnDestroy(): void {
+    this.heatMapService.dispose();
     this.container3DService.clear();
     this.truck3DService.dispose();
   }
@@ -84,10 +93,22 @@ export class ThreeDView implements AfterViewInit, OnDestroy, OnChanges {
   @HostListener('mouseup')
   onMouseUp(): void {
     this.container3DService.endDrag();
+    this.heatMapService.refresh(this.truck);
   }
 
   addContainer(containerData: Container): Promise<Container[]> {
-    return  this.container3DService.addContainer(containerData);
+    return this.container3DService.addContainer(containerData).then((result) => {
+      this.heatMapService.refresh(this.truck);
+      return result;
+    });
+  }
+
+  toggleHeatMap(show: boolean): void {
+    this.heatMapService.toggle(show, this.truck);
+  }
+
+  refreshHeatMap(): void {
+    this.heatMapService.refresh(this.truck);
   }
 
   private updateRaycaster(event: MouseEvent): void {

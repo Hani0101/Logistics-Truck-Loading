@@ -73,12 +73,19 @@ export class MainPage implements OnInit, OnDestroy {
   isSavingContainers  = false;
   currentLayoutId: string | null = null;
   optimizationProgress: OptimizationProgress | null = null;
+  showHeatMap = false;
 
   private subs: Subscription[] = [];
 
   ngOnInit(): void {
     this.subs.push(
-      this.session.isOptimizing$.subscribe((v)        => (this.isOptimizing        = v)),
+      this.session.isOptimizing$.subscribe((v) => {
+        const wasOptimizing = this.isOptimizing;
+        this.isOptimizing = v;
+        if (!v && wasOptimizing && this.showHeatMap) {
+          setTimeout(() => this.threeDView?.refreshHeatMap());
+        }
+      }),
       this.session.isSavingContainers$.subscribe((v)  => (this.isSavingContainers  = v)),
       this.session.currentLayoutId$.subscribe((id)    => (this.currentLayoutId     = id)),
       this.session.optimizationProgress$.subscribe((p) => (this.optimizationProgress = p)),
@@ -90,6 +97,10 @@ export class MainPage implements OnInit, OnDestroy {
   get totalTruckWeightKg():   number  { return this.session.totalTruckWeightKg; }
   get capacityUsedPercent():  number  { return this.session.capacityUsedPercent; }
   get isOverCapacity():       boolean { return this.session.isOverCapacity; }
+
+  onHeatMapToggle(show: boolean): void {
+    this.threeDView?.toggleHeatMap(show);
+  }
 
   onTruckDimensionsChanged(dimensions: TruckDimensions): void {
     this.currentTruckDimensions = { ...dimensions };
