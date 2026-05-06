@@ -49,7 +49,7 @@ export class Truck3DService {
     this.addLights();
 
     // Add grid helper
-    const gridHelper = new THREE.GridHelper(10, 10);
+    const gridHelper = new THREE.GridHelper(30, 30);
     this.scene.add(gridHelper);
 
     // Start animation loop

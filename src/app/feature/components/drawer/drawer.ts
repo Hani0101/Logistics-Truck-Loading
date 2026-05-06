@@ -35,6 +35,29 @@ export class Drawer implements OnInit {
     { label: 'Wooden Crate',  value: 'wooden-crate' },
   ];
 
+  truckPresets: { label: string; value: string; dims?: TruckDimensions }[] = [
+    { label: 'Custom',                       value: 'custom' },
+    { label: 'Small Van (3.5 t)',             value: 'small-van',         dims: { width: 1800,  length:  3200, height: 1800, weightKg:  1800, maxCapacityKg:  1000 } },
+    { label: 'Medium Box Truck (7.5 t)',      value: 'box-truck-75',      dims: { width: 2400,  length:  6000, height: 2400, weightKg:  4500, maxCapacityKg:  3000 } },
+    { label: 'Rigid Truck (18 t)',            value: 'rigid-18t',         dims: { width: 2480,  length:  8000, height: 2500, weightKg:  7000, maxCapacityKg: 11000 } },
+    { label: 'Rigid Truck (26 t)',            value: 'rigid-26t',         dims: { width: 2480,  length:  9000, height: 2500, weightKg: 12000, maxCapacityKg: 14000 } },
+    { label: 'Semi-Trailer — Standard',       value: 'semi-standard',     dims: { width: 2440,  length: 13600, height: 2700, weightKg:  8000, maxCapacityKg: 25000 } },
+    { label: 'Semi-Trailer — Mega / Jumbo',   value: 'semi-mega',         dims: { width: 2500,  length: 13600, height: 3000, weightKg:  8500, maxCapacityKg: 27500 } },
+    { label: 'Flatbed Trailer (12.5 m)',      value: 'flatbed',           dims: { width: 2440,  length: 12500, height:  300, weightKg:  7000, maxCapacityKg: 24000 } },
+    { label: 'Curtainside Trailer',           value: 'curtainside',       dims: { width: 2480,  length: 13600, height: 2700, weightKg:  8000, maxCapacityKg: 26000 } },
+    { label: 'Tandem Axle (US — 53 ft)',      value: 'us-53ft',           dims: { width: 2591,  length: 16154, height: 2743, weightKg:  9000, maxCapacityKg: 22680 } },
+    { label: 'B-Double / Road Train (AUS)',   value: 'b-double',          dims: { width: 2500,  length: 25000, height: 4300, weightKg: 20000, maxCapacityKg: 42500 } },
+  ];
+
+  selectedTruckPreset = 'custom';
+
+  onTruckPresetChange(value: string): void {
+    const preset = this.truckPresets.find(p => p.value === value);
+    if (preset?.dims) {
+      this.truckDimensions = { ...preset.dims };
+    }
+  }
+
   @Output() truckDimensionsChanged = new EventEmitter<TruckDimensions>();
   @Output() containerAdded = new EventEmitter<Container>();
 

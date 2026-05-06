@@ -75,6 +75,18 @@
 <!-- Truck Drawer -->
 <p-drawer [(visible)]="createTruck" header="Truck Setup" position="left">
   <div class="form-fields">
+    <div>
+      <p class="color-label">Truck Preset</p>
+      <p-select
+        [(ngModel)]="selectedTruckPreset"
+        [options]="truckPresets"
+        optionLabel="label"
+        optionValue="value"
+        [fluid]="true"
+        appendTo="body"
+        (ngModelChange)="onTruckPresetChange($event)">
+      </p-select>
+    </div>
     <p-floatlabel>
       <input type="number" pInputText id="truck_width" [(ngModel)]="truckDimensions.width" />
       <label for="truck_width">Width (mm)</label>

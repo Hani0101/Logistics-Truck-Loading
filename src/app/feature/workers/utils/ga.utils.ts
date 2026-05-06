@@ -18,7 +18,7 @@ export function timed<T>(name: string, caller: string, fn: () => T): T {
   const start = performance.now();
   const result = fn();
   const ms = (performance.now() - start).toFixed(2);
-  console.log(`[Timing] ${name} call ${count}: ${ms}ms | called from: ${caller}`);
+  // console.log(`[Timing] ${name} call ${count}: ${ms}ms | called from: ${caller}`);
   return result;
 }
 
