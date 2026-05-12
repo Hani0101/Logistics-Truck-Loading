@@ -15,6 +15,7 @@ import {
 function runGA(request: GaWorkerRequest): void {
   const { containers, truckWidthMm, truckLengthMm, truckHeightMm, packingOptions } = request;
   const { groupSameType, allowMixedStacking } = packingOptions;
+  const rotationOpts = { allowRotation: packingOptions.allowRotation, rotationAxes: packingOptions.rotationAxes };
 
   const gaOptions: GaOptions = request.gaOptions ?? {
     selectionMethod: 'tournament',
@@ -43,7 +44,7 @@ function runGA(request: GaWorkerRequest): void {
     : () => [...genes].sort(() => Math.random() - 0.5);
 
   let population = Array.from({ length: populationSize }, () =>
-    timed('decode', 'runGA:initPopulation', () => decode(shuffleFn(), truck, allowMixedStacking))
+    timed('decode', 'runGA:initPopulation', () => decode(shuffleFn(), truck, allowMixedStacking, rotationOpts))
   );
 
   for (let gen = 0; gen < generations; gen++) {
@@ -69,15 +70,15 @@ function runGA(request: GaWorkerRequest): void {
 
       let o1, o2;
       if (Math.random() < crossoverRate) {
-        o1 = timed('decode', 'runGA:crossover', () => decode(ox(p1.genes, p2.genes), truck, allowMixedStacking));
-        o2 = timed('decode', 'runGA:crossover', () => decode(ox(p2.genes, p1.genes), truck, allowMixedStacking));
+        o1 = timed('decode', 'runGA:crossover', () => decode(ox(p1.genes, p2.genes), truck, allowMixedStacking, rotationOpts));
+        o2 = timed('decode', 'runGA:crossover', () => decode(ox(p2.genes, p1.genes), truck, allowMixedStacking, rotationOpts));
       } else {
         o1 = cloneChromosome(p1);
         o2 = cloneChromosome(p2);
       }
 
-      timed('mutate', 'runGA', () => mutate(o1, truck, allowMixedStacking, groupSameType, gaOptions.mutationRate));
-      timed('mutate', 'runGA', () => mutate(o2, truck, allowMixedStacking, groupSameType, gaOptions.mutationRate));
+      timed('mutate', 'runGA', () => mutate(o1, truck, allowMixedStacking, groupSameType, gaOptions.mutationRate, rotationOpts));
+      timed('mutate', 'runGA', () => mutate(o2, truck, allowMixedStacking, groupSameType, gaOptions.mutationRate, rotationOpts));
       next.push(o1, o2);
     }
 

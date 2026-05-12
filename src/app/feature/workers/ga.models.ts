@@ -11,6 +11,8 @@ export interface GaContainer {
 export interface GaPackingOptions {
   groupSameType: boolean;
   allowMixedStacking: boolean;
+  allowRotation: boolean;
+  rotationAxes: ('x' | 'y' | 'z')[];
 }
 
 export type GaSelectionMethod = 'tournament' | 'roulette' | 'rank' | 'elitism';
@@ -34,19 +36,25 @@ export interface GaWorkerRequest {
   gaOptions?: GaOptions;
 }
 
+export type GaPositionEntry = {
+  id: string;
+  position: { x: number; y: number; z: number };
+  effectiveDimensions?: { width: number; length: number; height: number };
+};
+
 export interface GaProgressMessage {
   type: 'progress';
   generation: number;
   totalGenerations: number;
   bestFitness: number;
   avgFitness: number;
-  positions: { id: string; position: { x: number; y: number; z: number } }[];
+  positions: GaPositionEntry[];
 }
 
 export interface GaResultMessage {
   type: 'result';
   success: boolean;
-  positions?: { id: string; position: { x: number; y: number; z: number } }[];
+  positions?: GaPositionEntry[];
   finalFitness?: number;
   error?: string;
 }
@@ -73,4 +81,5 @@ export interface Chromosome { // chromosome is the possible solution, which is a
   genes: Gene[];
   positions: Vec3[];
   fitness: number;
+  effectiveDims?: { width: number; length: number; height: number }[];
 }

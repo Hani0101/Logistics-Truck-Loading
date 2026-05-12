@@ -54,10 +54,13 @@ export class LoadingSessionService implements OnDestroy {
           return;
         }
 
-        r.positions.forEach(({ id, position }) => {
+        r.positions.forEach(({ id, position, effectiveDimensions }) => {
           this.container3DService.updateSingleContainerPosition(
             id, new THREE.Vector3(position.x, position.y, position.z),
           );
+          if (effectiveDimensions) {
+            this.container3DService.applyEffectiveDimensions(id, effectiveDimensions);
+          }
         });
 
         this.messageService.add({

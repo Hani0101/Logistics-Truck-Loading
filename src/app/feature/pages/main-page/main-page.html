@@ -193,6 +193,46 @@
             [disabled]="isOptimizing">
           </p-toggleSwitch>
         </div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-label">Allow rotation</span>
+            <span class="toggle-desc">Rotate containers to improve fit</span>
+          </div>
+          <p-toggleSwitch
+            [(ngModel)]="packingOptions.allowRotation"
+            [disabled]="isOptimizing">
+          </p-toggleSwitch>
+        </div>
+
+        @if (packingOptions.allowRotation) {
+          <div class="rotation-axes-row">
+            <span class="toggle-desc">Axes (none = auto-best)</span>
+            <div class="axes-chips">
+              <p-toggleButton
+                onLabel="Y" offLabel="Y"
+                [ngModel]="packingOptions.rotationAxes.includes('y')"
+                (onChange)="toggleAxis('y', $event.checked)"
+                [disabled]="isOptimizing"
+                pTooltip="Spin on floor — swap width ↔ length">
+              </p-toggleButton>
+              <p-toggleButton
+                onLabel="X" offLabel="X"
+                [ngModel]="packingOptions.rotationAxes.includes('x')"
+                (onChange)="toggleAxis('x', $event.checked)"
+                [disabled]="isOptimizing"
+                pTooltip="Tip forward — swap length ↔ height">
+              </p-toggleButton>
+              <p-toggleButton
+                onLabel="Z" offLabel="Z"
+                [ngModel]="packingOptions.rotationAxes.includes('z')"
+                (onChange)="toggleAxis('z', $event.checked)"
+                [disabled]="isOptimizing"
+                pTooltip="Tip sideways — swap width ↔ height">
+              </p-toggleButton>
+            </div>
+          </div>
+        }
       </div>
 
       <div class="run-row">

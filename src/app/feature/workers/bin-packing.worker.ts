@@ -14,6 +14,8 @@ export interface BPContainer {
 export interface BPPackingOptions {
   groupSameType: boolean;
   allowMixedStacking: boolean;
+  allowRotation: boolean;
+  rotationAxes: ('x' | 'y' | 'z')[];
 }
 
 export interface BPWorkerRequest {
@@ -23,6 +25,12 @@ export interface BPWorkerRequest {
   truckHeightMm: number;
   packingOptions: BPPackingOptions;
 }
+
+export type BPPositionEntry = {
+  id: string;
+  position: { x: number; y: number; z: number };
+  effectiveDimensions?: { width: number; length: number; height: number };
+};
 
 export interface BPProgressMessage {
   type: 'progress';
@@ -34,13 +42,13 @@ export interface BPProgressMessage {
   improved: boolean;
   containersPlaced: number;
   totalContainers: number;
-  positions?: { id: string; position: { x: number; y: number; z: number } }[];
+  positions?: BPPositionEntry[];
 }
 
 export interface BPResultMessage {
   type: 'result';
   success: boolean;
-  positions?: { id: string; position: { x: number; y: number; z: number } }[];
+  positions?: BPPositionEntry[];
   bestStrategy?: string;
   bestScore?: number;
   error?: string;
@@ -55,6 +63,32 @@ interface PlacedItem { pos: Vec3; w: number; l: number; h: number; groupId?: str
 interface OrderingStrategy {
   name: string;
   sort: (containers: BPContainer[]) => BPContainer[];
+}
+
+interface Orientation { width: number; length: number; height: number; }
+
+function getOrientations(
+  width: number, length: number, height: number,
+  allowRotation: boolean, axes: ('x' | 'y' | 'z')[],
+): Orientation[] {
+  if (!allowRotation) return [{ width, length, height }];
+  const auto = axes.length === 0;
+  const hasY = auto || axes.includes('y');
+  const hasX = auto || axes.includes('x');
+  const hasZ = auto || axes.includes('z');
+  const candidates: Orientation[] = [{ width, length, height }];
+  if (hasY) candidates.push({ width: length, length: width,  height });
+  if (hasX) candidates.push({ width,          length: height, height: length });
+  if (hasZ) candidates.push({ width: height,  length,         height: width });
+  if (hasY && hasX) candidates.push({ width: length, length: height, height: width });
+  if (hasY && hasZ) candidates.push({ width: height, length: width,  height: length });
+  const seen = new Set<string>();
+  return candidates.filter((o) => {
+    const key = `${o.width},${o.length},${o.height}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function cargoBox(wMm: number, lMm: number, hMm: number): TruckBox {
@@ -165,67 +199,77 @@ function blf3D(
   ordered: BPContainer[],
   truck: TruckBox,
   allowMixedStacking: boolean,
-): { positions: Vec3[]; score: number } {
+  allowRotation: boolean,
+  rotationAxes: ('x' | 'y' | 'z')[],
+): { positions: Vec3[]; score: number; effectiveDims: Orientation[] } {
   const placed: PlacedItem[] = [];
   const positions: Vec3[] = [];
+  const effectiveDims: Orientation[] = [];
 
   const anchorsX = new Set<number>([-truck.w / 2]);
   const anchorsZ = new Set<number>([-truck.l / 2]);
 
   for (const c of ordered) {
-    const cw = c.width;
-    const cl = c.length;
-    const ch = c.height;
+    const orientations = getOrientations(c.width, c.length, c.height, allowRotation, rotationAxes);
 
     let bestPos: Vec3 | null = null;
     let bestScore = Infinity;
+    let bestOrient: Orientation = { width: c.width, length: c.length, height: c.height };
 
     const sortedX = [...anchorsX].sort((a, b) => a - b);
     const sortedZ = [...anchorsZ].sort((a, b) => a - b);
 
-    for (const ax of sortedX) {
-      for (const az of sortedZ) {
-        const cx = ax + cw / 2;
-        const cz = az + cl / 2;
+    for (const orient of orientations) {
+      const cw = orient.width;
+      const cl = orient.length;
+      const ch = orient.height;
 
-        if (cx + cw / 2 > truck.w / 2 + 1e-6) continue;
-        if (cz + cl / 2 > truck.l / 2 + 1e-6) continue;
+      for (const ax of sortedX) {
+        for (const az of sortedZ) {
+          const cx = ax + cw / 2;
+          const cz = az + cl / 2;
 
-        const cy = findRestingY(cx, cz, cw, cl, ch, placed, truck.h);
-        if (cy === null) continue;
+          if (cx + cw / 2 > truck.w / 2 + 1e-6) continue;
+          if (cz + cl / 2 > truck.l / 2 + 1e-6) continue;
 
-        const candidate = { x: cx, y: cy, z: cz };
-        if (overlapsAny(candidate, cw, cl, ch, placed)) continue;
+          const cy = findRestingY(cx, cz, cw, cl, ch, placed, truck.h);
+          if (cy === null) continue;
 
-        if (!allowMixedStacking && restsOnDifferentGroup(cx, cy, cz, cw, cl, ch, placed, c.groupId)) {
-          continue;
-        }
+          const candidate = { x: cx, y: cy, z: cz };
+          if (overlapsAny(candidate, cw, cl, ch, placed)) continue;
 
-        // When mixed stacking is off, strongly prefer stacking within the same
-        const sameGroupStack = !allowMixedStacking &&
-          isStackingOnSameGroup(cx, cy, cz, cw, cl, ch, placed, c.groupId);
-        const yScore = sameGroupStack ? cy * 100 : cy * 1_000_000;
-        const score = yScore + (cz + truck.l / 2) * 1000 + (cx + truck.w / 2);
-        if (score < bestScore) {
-          bestScore = score;
-          bestPos = candidate;
+          if (!allowMixedStacking && restsOnDifferentGroup(cx, cy, cz, cw, cl, ch, placed, c.groupId)) continue;
+
+          const sameGroupStack = !allowMixedStacking &&
+            isStackingOnSameGroup(cx, cy, cz, cw, cl, ch, placed, c.groupId);
+          const yScore = sameGroupStack ? cy * 100 : cy * 1_000_000;
+          const score = yScore + (cz + truck.l / 2) * 1000 + (cx + truck.w / 2);
+          if (score < bestScore) {
+            bestScore = score;
+            bestPos = candidate;
+            bestOrient = orient;
+          }
         }
       }
     }
 
+    const cw = bestOrient.width;
+    const cl = bestOrient.length;
+    const ch = bestOrient.height;
+
     if (!bestPos) {
-      // Fallback
       bestPos = findFallbackPosition(cw, cl, ch, placed, truck, allowMixedStacking, c.groupId);
     }
 
     placed.push({ pos: bestPos, w: cw, l: cl, h: ch, groupId: c.groupId });
     positions.push(bestPos);
+    effectiveDims.push(bestOrient);
     anchorsX.add(bestPos.x + cw / 2);
     anchorsZ.add(bestPos.z + cl / 2);
   }
 
   const score = calcPackingScore(positions, ordered, truck);
-  return { positions, score };
+  return { positions, score, effectiveDims };
 }
 
 
@@ -342,7 +386,7 @@ function buildStrategies(): OrderingStrategy[] {
 
 function runBinPacking(request: BPWorkerRequest): void {
   const { containers, truckWidthMm, truckLengthMm, truckHeightMm, packingOptions } = request;
-  const { groupSameType, allowMixedStacking } = packingOptions;
+  const { groupSameType, allowMixedStacking, allowRotation, rotationAxes } = packingOptions;
 
   if (!containers.length) {
     postMessage({ type: 'result', success: true, positions: [] } satisfies BPResultMessage);
@@ -355,6 +399,7 @@ function runBinPacking(request: BPWorkerRequest): void {
 
   let bestScore = -Infinity;
   let bestPositions: Vec3[] = [];
+  let bestEffectiveDims: Orientation[] = [];
   let bestOrder: BPContainer[] = [];
   let bestStrategyName = '';
 
@@ -366,12 +411,13 @@ function runBinPacking(request: BPWorkerRequest): void {
       ordered = applyGrouping(containers, strategy.sort);
     }
 
-    const { positions, score } = blf3D(ordered, truck, allowMixedStacking);
+    const { positions, score, effectiveDims } = blf3D(ordered, truck, allowMixedStacking, allowRotation, rotationAxes);
 
     const improved = score > bestScore;
     if (improved) {
       bestScore = score;
       bestPositions = positions;
+      bestEffectiveDims = effectiveDims;
       bestOrder = ordered;
       bestStrategyName = strategy.name;
     }
@@ -392,6 +438,7 @@ function runBinPacking(request: BPWorkerRequest): void {
       progressMsg.positions = ordered.map((c, idx) => ({
         id: c.id,
         position: positions[idx],
+        effectiveDimensions: effectiveDims[idx],
       }));
     }
 
@@ -401,6 +448,7 @@ function runBinPacking(request: BPWorkerRequest): void {
   const result = bestOrder.map((c, i) => ({
     id: c.id,
     position: bestPositions[i],
+    effectiveDimensions: bestEffectiveDims[i],
   }));
 
   postMessage({

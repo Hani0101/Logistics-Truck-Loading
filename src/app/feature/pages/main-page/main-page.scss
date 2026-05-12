@@ -164,6 +164,19 @@
   font-family: $font-mono;
 }
 
+.rotation-axes-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.2rem 0 0.2rem 0.5rem;
+}
+
+.axes-chips {
+  display: flex;
+  gap: 0.3rem;
+}
+
 .run-row {
   display: flex;
   gap: 0.4rem;

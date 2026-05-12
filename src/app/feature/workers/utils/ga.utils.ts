@@ -1,5 +1,5 @@
 import {
-  Chromosome, GaContainer, GaOptions, Gene, PlacedGene, TruckBox, Vec3,
+  Chromosome, GaContainer, GaOptions, GaPackingOptions, Gene, PlacedGene, TruckBox, Vec3,
 } from '../ga.models';
 
 export const DEFAULT_POPULATION_SIZE = 60;
@@ -20,6 +20,36 @@ export function timed<T>(name: string, caller: string, fn: () => T): T {
   const ms = (performance.now() - start).toFixed(2);
   // console.log(`[Timing] ${name} call ${count}: ${ms}ms | called from: ${caller}`);
   return result;
+}
+
+export interface Orientation { width: number; length: number; height: number; }
+
+export function getOrientations(
+  width: number, length: number, height: number,
+  allowRotation: boolean,
+  axes: ('x' | 'y' | 'z')[],
+): Orientation[] {
+  if (!allowRotation) return [{ width, length, height }];
+
+  const auto = axes.length === 0;
+  const hasY = auto || axes.includes('y');
+  const hasX = auto || axes.includes('x');
+  const hasZ = auto || axes.includes('z');
+
+  const candidates: Orientation[] = [{ width, length, height }];
+  if (hasY) candidates.push({ width: length, length: width,  height });
+  if (hasX) candidates.push({ width,          length: height, height: length });
+  if (hasZ) candidates.push({ width: height,  length,         height: width });
+  if (hasY && hasX) candidates.push({ width: length, length: height, height: width });
+  if (hasY && hasZ) candidates.push({ width: height, length: width,  height: length });
+
+  const seen = new Set<string>();
+  return candidates.filter((o) => {
+    const key = `${o.width},${o.length},${o.height}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function truckBox(wMm: number, lMm: number, hMm: number): TruckBox {
@@ -172,54 +202,69 @@ export function findFallbackPosition(
 // place containers functions uses the logic of anchoring each x and z axis to
 // determine the start of the new introduced container
 // ps: initially it starts from bottom left corner
-export function placeContainers(ordered: Gene[], truck: TruckBox, allowMixedStacking: boolean): Vec3[] {
+export function placeContainers(
+  ordered: Gene[], truck: TruckBox, allowMixedStacking: boolean,
+  packingOptions?: Pick<GaPackingOptions, 'allowRotation' | 'rotationAxes'>,
+): { positions: Vec3[]; effectiveDims: Orientation[] } {
   const placed: PlacedGene[] = [];
   const anchorsX = new Set<number>([-truck.w / 2]);
   const anchorsZ = new Set<number>([-truck.l / 2]);
+  const effectiveDims: Orientation[] = [];
+
+  const allowRotation = packingOptions?.allowRotation ?? false;
+  const rotationAxes  = packingOptions?.rotationAxes  ?? [];
+
   for (const c of ordered) {
+    const orientations = getOrientations(c.width, c.length, c.height, allowRotation, rotationAxes);
+
     let bestPos: Vec3 | null = null;
     let bestScore = Infinity;
+    let bestOrient: Orientation = { width: c.width, length: c.length, height: c.height };
 
-    for (const ax of [...anchorsX].sort((a, b) => a - b)) {
-      for (const az of [...anchorsZ].sort((a, b) => a - b)) {
-        const cx = ax + c.width  / 2; // trying every combination of x and z anchors
-        const cz = az + c.length / 2;
+    for (const orient of orientations) {
+      const gc: Gene = { ...c, width: orient.width, length: orient.length, height: orient.height };
 
-        if (cx + c.width  / 2 > truck.w / 2 + 1e-6) continue; // avoid rejecting valid positions due to decimals
-        if (cz + c.length / 2 > truck.l / 2 + 1e-6) continue;
+      for (const ax of [...anchorsX].sort((a, b) => a - b)) {
+        for (const az of [...anchorsZ].sort((a, b) => a - b)) {
+          const cx = ax + gc.width  / 2;
+          const cz = az + gc.length / 2;
 
-        const cy = findRestingY(cx, cz, c, placed, truck.h);
-        if (cy === null) continue;
+          if (cx + gc.width  / 2 > truck.w / 2 + 1e-6) continue;
+          if (cz + gc.length / 2 > truck.l / 2 + 1e-6) continue;
 
-        const candidate = { x: cx, y: cy, z: cz };
-        if (overlapsAny(candidate, c, placed)) continue;
+          const cy = findRestingY(cx, cz, gc, placed, truck.h);
+          if (cy === null) continue;
 
-        if (!allowMixedStacking && restsOnDifferentGroup(cx, cy, cz, c, placed)) {
-          continue;
-        }
+          const candidate = { x: cx, y: cy, z: cz };
+          if (overlapsAny(candidate, gc, placed)) continue;
 
-        // When mixed stacking is off, strongly prefer stacking within the same
-        // group, this compacts each group vertically and frees floor space for
-        // other groups instead of spreading everything across the floor.
-        const sameGroupStack = !allowMixedStacking && isStackingOnSameGroup(cx, cy, cz, c, placed);
-        const yScore = sameGroupStack ? cy * 100 : cy * 1_000_000;
-        const score = yScore + (cz + truck.l / 2) * 1000 + (cx + truck.w / 2);
-        if (score < bestScore) {
-          bestScore = score;
-          bestPos   = candidate;
+          if (!allowMixedStacking && restsOnDifferentGroup(cx, cy, cz, gc, placed)) continue;
+
+          const sameGroupStack = !allowMixedStacking && isStackingOnSameGroup(cx, cy, cz, gc, placed);
+          const yScore = sameGroupStack ? cy * 100 : cy * 1_000_000;
+          const score = yScore + (cz + truck.l / 2) * 1000 + (cx + truck.w / 2);
+          if (score < bestScore) {
+            bestScore = score;
+            bestPos   = candidate;
+            bestOrient = orient;
+          }
         }
       }
     }
 
+    const chosenGene: Gene = { ...c, width: bestOrient.width, length: bestOrient.length, height: bestOrient.height };
+
     if (!bestPos) {
-      bestPos = findFallbackPosition(c, placed, truck, allowMixedStacking);
+      bestPos = findFallbackPosition(chosenGene, placed, truck, allowMixedStacking);
     }
-    placed.push({ pos: bestPos, g: c });
-    anchorsX.add(bestPos.x + c.width  / 2);
-    anchorsZ.add(bestPos.z + c.length / 2);
+
+    placed.push({ pos: bestPos, g: chosenGene });
+    anchorsX.add(bestPos.x + chosenGene.width  / 2);
+    anchorsZ.add(bestPos.z + chosenGene.length / 2);
+    effectiveDims.push(bestOrient);
   }
-  console.log("placed", placed);
-  return placed.map((p) => p.pos);
+
+  return { positions: placed.map((p) => p.pos), effectiveDims };
 }
 
 export function calcFitness(chrom: Chromosome, truck: TruckBox): number {
@@ -235,18 +280,23 @@ export function calcFitness(chrom: Chromosome, truck: TruckBox): number {
   return (usedVol / truckVol) * 500 + packScore * 0.5 + chrom.genes.length * 10;
 }
 
-export function decode(genes: Gene[], truck: TruckBox, allowMixedStacking: boolean): Chromosome {
-  const positions = timed('placeContainers', 'decode', () => placeContainers(genes, truck, allowMixedStacking));
-  const chrom: Chromosome = { genes, positions, fitness: 0 };
+export function decode(
+  genes: Gene[], truck: TruckBox, allowMixedStacking: boolean,
+  packingOptions?: Pick<GaPackingOptions, 'allowRotation' | 'rotationAxes'>,
+): Chromosome {
+  const { positions, effectiveDims } = timed('placeContainers', 'decode', () =>
+    placeContainers(genes, truck, allowMixedStacking, packingOptions));
+  const chrom: Chromosome = { genes, positions, fitness: 0, effectiveDims };
   chrom.fitness = timed('calcFitness', 'decode', () => calcFitness(chrom, truck));
   return chrom;
 }
 
 export function cloneChromosome(c: Chromosome): Chromosome {
   return {
-    genes:     c.genes.map((g) => ({ ...g })),
-    positions: c.positions.map((p) => ({ ...p })),
-    fitness:   c.fitness,
+    genes:        c.genes.map((g) => ({ ...g })),
+    positions:    c.positions.map((p) => ({ ...p })),
+    fitness:      c.fitness,
+    effectiveDims: c.effectiveDims?.map((d) => ({ ...d })),
   };
 }
 
@@ -265,6 +315,7 @@ export function ox(primary: Gene[], secondary: Gene[]): Gene[] {
 export function mutate(
   chrom: Chromosome, truck: TruckBox, allowMixedStacking: boolean,
   groupSameType: boolean, mutationRate = DEFAULT_MUTATION_RATE,
+  packingOptions?: Pick<GaPackingOptions, 'allowRotation' | 'rotationAxes'>,
 ): void {
   let mutated = false;
   for (let i = 0; i < chrom.genes.length; i++) {
@@ -285,8 +336,11 @@ export function mutate(
     }
   }
   if (mutated) {
-    chrom.positions = timed('placeContainers', 'mutate', () => placeContainers(chrom.genes, truck, allowMixedStacking));
-    chrom.fitness   = timed('calcFitness', 'mutate', () => calcFitness(chrom, truck));
+    const { positions, effectiveDims } = timed('placeContainers', 'mutate', () =>
+      placeContainers(chrom.genes, truck, allowMixedStacking, packingOptions));
+    chrom.positions    = positions;
+    chrom.effectiveDims = effectiveDims;
+    chrom.fitness      = timed('calcFitness', 'mutate', () => calcFitness(chrom, truck));
   }
 }
 
@@ -343,5 +397,6 @@ export function extractPositions(chrom: Chromosome, tagToId: Map<number, string>
   return chrom.genes.map((gene, i) => ({
     id:       tagToId.get(gene.tag)!,
     position: chrom.positions[i],
+    effectiveDimensions: chrom.effectiveDims?.[i],
   }));
 }

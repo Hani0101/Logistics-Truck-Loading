@@ -8,18 +8,24 @@ import { MaxRectsPackingStrategy } from './strategies/maxrects-packing.strategy'
 
 export type AlgorithmType = 'genetic' | 'binpacking' | 'maxrects';
 
+export type PositionEntry = {
+  id: string;
+  position: { x: number; y: number; z: number };
+  effectiveDimensions?: { width: number; length: number; height: number };
+};
+
 export interface OptimizationProgress {
   algorithm: AlgorithmType;
   percent: number;
   label: string;
   detail?: string;
   improved?: boolean;
-  positions?: { id: string; position: { x: number; y: number; z: number } }[];
+  positions?: PositionEntry[];
 }
 
 export interface OptimizationResult {
   success: boolean;
-  positions?: { id: string; position: { x: number; y: number; z: number } }[];
+  positions?: PositionEntry[];
   error?: string;
   summary?: string;
 }

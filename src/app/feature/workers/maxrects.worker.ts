@@ -13,6 +13,8 @@ export interface MRContainer {
 export interface MRPackingOptions {
   groupSameType: boolean;
   allowMixedStacking: boolean;
+  allowRotation: boolean;
+  rotationAxes: ('x' | 'y' | 'z')[];
 }
 
 export interface MRWorkerRequest {
@@ -22,6 +24,12 @@ export interface MRWorkerRequest {
   truckHeightMm: number;
   packingOptions: MRPackingOptions;
 }
+
+export type MRPositionEntry = {
+  id: string;
+  position: { x: number; y: number; z: number };
+  effectiveDimensions?: { width: number; length: number; height: number };
+};
 
 export interface MRProgressMessage {
   type: 'progress';
@@ -33,13 +41,13 @@ export interface MRProgressMessage {
   improved: boolean;
   containersPlaced: number;
   totalContainers: number;
-  positions?: { id: string; position: { x: number; y: number; z: number } }[];
+  positions?: MRPositionEntry[];
 }
 
 export interface MRResultMessage {
   type: 'result';
   success: boolean;
-  positions?: { id: string; position: { x: number; y: number; z: number } }[];
+  positions?: MRPositionEntry[];
   bestStrategy?: string;
   bestScore?: number;
   error?: string;
@@ -65,6 +73,32 @@ interface OrderingStrategy {
 }
 
 // Helpers (adapted from bin-packing.worker.ts)
+
+interface Orientation { width: number; length: number; height: number; }
+
+function getOrientations(
+  width: number, length: number, height: number,
+  allowRotation: boolean, axes: ('x' | 'y' | 'z')[],
+): Orientation[] {
+  if (!allowRotation) return [{ width, length, height }];
+  const auto = axes.length === 0;
+  const hasY = auto || axes.includes('y');
+  const hasX = auto || axes.includes('x');
+  const hasZ = auto || axes.includes('z');
+  const candidates: Orientation[] = [{ width, length, height }];
+  if (hasY) candidates.push({ width: length, length: width,  height });
+  if (hasX) candidates.push({ width,          length: height, height: length });
+  if (hasZ) candidates.push({ width: height,  length,         height: width });
+  if (hasY && hasX) candidates.push({ width: length, length: height, height: width });
+  if (hasY && hasZ) candidates.push({ width: height, length: width,  height: length });
+  const seen = new Set<string>();
+  return candidates.filter((o) => {
+    const key = `${o.width},${o.length},${o.height}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 function cargoBox(wMm: number, lMm: number, hMm: number): TruckBox {
   const f = 0.001;
@@ -218,10 +252,14 @@ class MaxRectsPacker {
   private placed: PlacedItem[] = [];
   private readonly truck: TruckBox;
   private readonly allowMixedStacking: boolean;
+  private readonly allowRotation: boolean;
+  private readonly rotationAxes: ('x' | 'y' | 'z')[];
 
-  constructor(truck: TruckBox, allowMixedStacking: boolean) {
+  constructor(truck: TruckBox, allowMixedStacking: boolean, allowRotation: boolean, rotationAxes: ('x' | 'y' | 'z')[]) {
     this.truck = truck;
     this.allowMixedStacking = allowMixedStacking;
+    this.allowRotation = allowRotation;
+    this.rotationAxes = rotationAxes;
     this.freeRects = [{
       x: -truck.w / 2,
       z: -truck.l / 2,
@@ -231,21 +269,33 @@ class MaxRectsPacker {
     }];
   }
 
-  pack(ordered: MRContainer[]): Vec3[] {
+  pack(ordered: MRContainer[]): { positions: Vec3[]; effectiveDims: Orientation[] } {
     const positions: Vec3[] = [];
+    const effectiveDims: Orientation[] = [];
 
     for (const c of ordered) {
-      const cw = c.width;
-      const cl = c.length;
-      const ch = c.height;
+      const orientations = getOrientations(c.width, c.length, c.height, this.allowRotation, this.rotationAxes);
 
-      const best = this.findBestRect(cw, cl, c.groupId);
+      let bestResult: { rect: FreeRect; rectIdx: number; score: number } | null = null;
+      let bestOrient: Orientation = { width: c.width, length: c.length, height: c.height };
+
+      for (const orient of orientations) {
+        const result = this.findBestRect(orient.width, orient.length, c.groupId);
+        if (result && result.score < (bestResult?.score ?? Infinity)) {
+          bestResult = result;
+          bestOrient = orient;
+        }
+      }
+
+      const cw = bestOrient.width;
+      const cl = bestOrient.length;
+      const ch = bestOrient.height;
 
       let pos: Vec3;
-      if (!best) {
+      if (!bestResult) {
         pos = findFallbackPosition(cw, cl, ch, this.placed, this.truck, this.allowMixedStacking, c.groupId);
       } else {
-        const { rect, rectIdx } = best;
+        const { rect, rectIdx } = bestResult;
         const cx = rect.x + cw / 2;
         const cz = rect.z + cl / 2;
         const cy = rect.floorY + ch / 2;
@@ -273,14 +323,15 @@ class MaxRectsPacker {
 
       this.placed.push({ pos, w: cw, l: cl, h: ch, groupId: c.groupId });
       positions.push(pos);
+      effectiveDims.push(bestOrient);
     }
 
-    return positions;
+    return { positions, effectiveDims };
   }
 
   private findBestRect(
     cw: number, cl: number, groupId?: string,
-  ): { rect: FreeRect; rectIdx: number } | null {
+  ): { rect: FreeRect; rectIdx: number; score: number } | null {
     let bestScore = Infinity;
     let bestIdx = -1;
 
@@ -303,7 +354,7 @@ class MaxRectsPacker {
       }
     }
 
-    return bestIdx >= 0 ? { rect: this.freeRects[bestIdx], rectIdx: bestIdx } : null;
+    return bestIdx >= 0 ? { rect: this.freeRects[bestIdx], rectIdx: bestIdx, score: bestScore } : null;
   }
 
   private rectHasMixedSupport(rect: FreeRect, groupId?: string): boolean {
@@ -476,7 +527,7 @@ function buildStrategies(): OrderingStrategy[] {
 
 function runMaxRects(request: MRWorkerRequest): void {
   const { containers, truckWidthMm, truckLengthMm, truckHeightMm, packingOptions } = request;
-  const { groupSameType, allowMixedStacking } = packingOptions;
+  const { groupSameType, allowMixedStacking, allowRotation, rotationAxes } = packingOptions;
 
   if (!containers.length) {
     postMessage({ type: 'result', success: true, positions: [] } satisfies MRResultMessage);
@@ -489,6 +540,7 @@ function runMaxRects(request: MRWorkerRequest): void {
 
   let bestScore = -Infinity;
   let bestPositions: Vec3[] = [];
+  let bestEffectiveDims: Orientation[] = [];
   let bestOrder: MRContainer[] = [];
   let bestStrategyName = '';
 
@@ -500,14 +552,15 @@ function runMaxRects(request: MRWorkerRequest): void {
       ordered = applyGrouping(containers, strategy.sort);
     }
 
-    const packer = new MaxRectsPacker(truck, allowMixedStacking);
-    const positions = packer.pack(ordered);
+    const packer = new MaxRectsPacker(truck, allowMixedStacking, allowRotation, rotationAxes);
+    const { positions, effectiveDims } = packer.pack(ordered);
     const score = calcPackingScore(positions, ordered, truck);
 
     const improved = score > bestScore;
     if (improved) {
       bestScore = score;
       bestPositions = positions;
+      bestEffectiveDims = effectiveDims;
       bestOrder = ordered;
       bestStrategyName = strategy.name;
     }
@@ -528,6 +581,7 @@ function runMaxRects(request: MRWorkerRequest): void {
       progressMsg.positions = ordered.map((c, idx) => ({
         id: c.id,
         position: positions[idx],
+        effectiveDimensions: effectiveDims[idx],
       }));
     }
 
@@ -537,6 +591,7 @@ function runMaxRects(request: MRWorkerRequest): void {
   const result = bestOrder.map((c, i) => ({
     id: c.id,
     position: bestPositions[i],
+    effectiveDimensions: bestEffectiveDims[i],
   }));
 
   postMessage({

@@ -10,6 +10,7 @@ import { ButtonModule } from 'primeng/button';
 import { ToastModule } from 'primeng/toast';
 import { SelectModule } from 'primeng/select';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
+import { ToggleButtonModule } from 'primeng/togglebutton';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { TooltipModule } from 'primeng/tooltip';
@@ -37,7 +38,7 @@ interface SelectionMethodOption {
   imports: [
     Drawer, ThreeDView, CommonModule, FormsModule,
     ButtonModule, ToastModule, SelectModule, ProgressBarModule,
-    ToggleSwitchModule, TooltipModule, InputNumberModule,
+    ToggleSwitchModule, ToggleButtonModule, TooltipModule, InputNumberModule,
   ],
   providers: [MessageService, LoadingSessionService],
   templateUrl: './main-page.html',
@@ -108,6 +109,16 @@ export class MainPage implements OnInit, OnDestroy {
 
   runOptimization(): void {
     this.session.runOptimization(this.selectedAlgorithm, this.packingOptions, this.gaOptions);
+  }
+
+  toggleAxis(axis: 'x' | 'y' | 'z', checked: boolean): void {
+    const axes = this.packingOptions.rotationAxes;
+    this.packingOptions = {
+      ...this.packingOptions,
+      rotationAxes: checked
+        ? (axes.includes(axis) ? axes : [...axes, axis])
+        : axes.filter((a) => a !== axis),
+    };
   }
 
   getAlgorithmLabel(algo: AlgorithmType): string {
