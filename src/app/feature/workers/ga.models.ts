@@ -59,7 +59,35 @@ export interface GaResultMessage {
   error?: string;
 }
 
-export type GaWorkerMessage = GaProgressMessage | GaResultMessage;
+// Island-model message types
+
+// Coordinator → island: kick off an island run
+export interface GaIslandStartMessage extends GaWorkerRequest {
+  type: 'start';
+  islandId: number;
+  numIslands: number;
+  migrationInterval: number;
+  migrationCount: number;
+}
+
+// Coordinator -> island: resume after a migration exchange
+export interface GaIslandContinueMessage {
+  type: 'continue';
+  migrants: string[][];  // ordered container-ID sequences from other islands
+}
+
+// Island -> coordinator: migration checkpoint (top-k orderings + progress snapshot)
+export interface GaIslandMigrateOutMessage {
+  type: 'migrate-out';
+  islandId: number;
+  topOrdering: string[][];  // top-k gene orderings as container-ID sequences
+  generation: number;
+  bestFitness: number;
+  avgFitness: number;
+  positions: GaPositionEntry[];
+}
+
+export type GaWorkerMessage = GaProgressMessage | GaResultMessage | GaIslandMigrateOutMessage;
 
 export interface TruckBox { w: number; l: number; h: number; }
 export interface Vec3     { x: number; y: number; z: number; }
