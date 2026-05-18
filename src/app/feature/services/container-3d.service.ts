@@ -49,6 +49,8 @@ export class Container3DService {
     }
 
     const geometry = isModel ? null : new THREE.BoxGeometry(width, height, length);
+    const edgesGeometry = geometry ? new THREE.EdgesGeometry(geometry) : null;
+    const colorInt = containerData.color ? parseInt(containerData.color.replace('#', ''), 16) : 0x3b82f6;
 
     for (let i = 0; i < containerData.amount; i++) {
       const id = `container-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -57,26 +59,19 @@ export class Container3DService {
 
       if (isModel) {
         mesh = this.crateLoader.cloneAndScale(containerData.containerType!, containerData.width, containerData.length, containerData.height);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
       } else {
         const material = new THREE.MeshStandardMaterial({
-          color: containerData.color ? parseInt(containerData.color.replace('#', ''), 16) : 0x3b82f6,
+          color: colorInt,
           metalness: 0.3,
           roughness: 0.4,
           transparent: true,
           opacity: 0.8,
         });
         const boxMesh = new THREE.Mesh(geometry!, material);
-        boxMesh.castShadow = true;
-        boxMesh.receiveShadow = true;
         boxMesh.add(
           new THREE.LineSegments(
-            new THREE.EdgesGeometry(geometry!),
-            new THREE.LineBasicMaterial({
-              color: containerData.color ? parseInt(containerData.color.replace('#', ''), 16) : 0x3b82f6,
-              linewidth: 2,
-            })
+            edgesGeometry!,
+            new THREE.LineBasicMaterial({ color: colorInt, linewidth: 2 })
           )
         );
         originalMaterial = material;
@@ -87,6 +82,7 @@ export class Container3DService {
       mesh.position.copy(initialPosition);
       mesh.userData['containerId'] = id;
       this.scene.add(mesh);
+      this.truck3DService.markDirty();
 
       const container: Container = {
         id,
@@ -212,6 +208,7 @@ export class Container3DService {
         position: pos, mesh, originalMaterial,
       });
     }
+    this.truck3DService.markDirty();
   }
 
   updateSingleContainerPosition(id: string, position: THREE.Vector3): void {
@@ -219,6 +216,7 @@ export class Container3DService {
     if (container?.mesh && container.position) {
       container.position.copy(position);
       container.mesh.position.copy(position);
+      this.truck3DService.markDirty();
     }
   }
 
@@ -258,6 +256,7 @@ export class Container3DService {
       this.scene.add(scaledMesh);
       container.mesh = scaledMesh;
     }
+    this.truck3DService.markDirty();
   }
 
   serializeForApi(): ContainerPayload[] {
@@ -301,12 +300,14 @@ export class Container3DService {
       this.visualHelperMesh.position.copy(this.dragPoint);
       this.updateHelperColor();
     }
+    this.truck3DService.markDirty();
   }
 
   endDrag(): void {
     this.truck3DService.enableControls();
     this.draggedContainer = null;
     this.hideVisualHelper();
+    this.truck3DService.markDirty();
   }
 
   selectContainer(container: Container): void {
@@ -314,6 +315,7 @@ export class Container3DService {
     const mat = (container.mesh as THREE.Mesh).material as THREE.MeshStandardMaterial;
     mat.emissive.setHex(0xffd700);
     mat.emissiveIntensity = 0.4;
+    this.truck3DService.markDirty();
   }
 
   deselectContainer(container: Container): void {
@@ -321,6 +323,7 @@ export class Container3DService {
     const mat = (container.mesh as THREE.Mesh).material as THREE.MeshStandardMaterial;
     mat.emissive.setHex(0x000000);
     mat.emissiveIntensity = 0;
+    this.truck3DService.markDirty();
   }
 
   private showVisualHelper(container: Container): void {
@@ -398,6 +401,7 @@ export class Container3DService {
         sc.mesh.position.copy(layout.positions[i]);
       }
     });
+    this.truck3DService.markDirty();
   }
 
   removeContainer(id: string): void {

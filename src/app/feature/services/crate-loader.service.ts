@@ -33,6 +33,7 @@ export class CrateLoaderService {
   private platformId = inject(PLATFORM_ID);
   private protoGroups = new Map<string, THREE.Group>();
   private loadPromises = new Map<string, Promise<THREE.Group>>();
+  private cachedSizes = new Map<string, THREE.Vector3>();
 
   preload(type: ContainerType = 'crate'): Promise<THREE.Group> {
     if (!isPlatformBrowser(this.platformId)) {
@@ -87,9 +88,14 @@ export class CrateLoaderService {
     }
     inner.updateMatrixWorld(true);
 
-    const box = new THREE.Box3().setFromObject(inner);
-    const modelSize = new THREE.Vector3();
-    box.getSize(modelSize);
+    let modelSize: THREE.Vector3;
+    if (this.cachedSizes.has(type)) {
+      modelSize = this.cachedSizes.get(type)!.clone();
+    } else {
+      modelSize = new THREE.Vector3();
+      new THREE.Box3().setFromObject(inner).getSize(modelSize);
+      this.cachedSizes.set(type, modelSize.clone());
+    }
 
     const f = 0.001;
     if (config.swapYZScale) {
