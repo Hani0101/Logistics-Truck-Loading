@@ -392,6 +392,7 @@
 .viewport-canvas {
   flex: 1;
   min-height: 0;
+  position: relative;
 
   app-3d-view {
     display: block;
@@ -447,4 +448,44 @@
   border: 1px solid rgba($accent, 0.2);
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
+.heatmap-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.heatmap-toggle-label {
+  font-family: $font-mono;
+  font-size: 0.7rem;
+  color: $text-muted;
+  white-space: nowrap;
+}
+
+.heatmap-legend {
+  position: absolute;
+  bottom: 1.2rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba($bg-dark, 0.88);
+  border: 1px solid $border-color;
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  pointer-events: none;
+  z-index: 10;
+  animation: slideDown 0.2s ease-out;
+}
+
+.legend-gradient {
+  width: 80px;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(to right, #0000ff, #00ffff, #00ff00, #ffff00, #ff0000);
+}
+
+.legend-label {
+  font-family: $font-mono;
+  font-size: 0.65rem;
+  color: $text-muted;
 }

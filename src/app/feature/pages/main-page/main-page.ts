@@ -84,6 +84,7 @@ export class MainPage implements OnInit, AfterViewInit, OnDestroy {
   isCreatingDispatch  = false;
   currentLayoutId: string | null = null;
   optimizationProgress: OptimizationProgress | null = null;
+  showHeatMap = false;
 
   availableLayouts: LayoutSummary[] = [];
   selectedLayoutToLoad: string | null = null;
@@ -113,9 +114,15 @@ export class MainPage implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.subs.push(
-      this.session.isOptimizing$.subscribe((v)         => (this.isOptimizing        = v)),
-      this.session.isSavingContainers$.subscribe((v)   => (this.isSavingContainers  = v)),
-      this.session.currentLayoutId$.subscribe((id)     => (this.currentLayoutId     = id)),
+      this.session.isOptimizing$.subscribe((v) => {
+        const wasOptimizing = this.isOptimizing;
+        this.isOptimizing = v;
+        if (!v && wasOptimizing && this.showHeatMap) {
+          setTimeout(() => this.threeDView?.refreshHeatMap());
+        }
+      }),
+      this.session.isSavingContainers$.subscribe((v)  => (this.isSavingContainers  = v)),
+      this.session.currentLayoutId$.subscribe((id)    => (this.currentLayoutId     = id)),
       this.session.optimizationProgress$.subscribe((p) => (this.optimizationProgress = p)),
     );
 
@@ -181,6 +188,13 @@ export class MainPage implements OnInit, AfterViewInit, OnDestroy {
         });
       },
     });
+  onHeatMapToggle(show: boolean): void {
+    this.threeDView?.toggleHeatMap(show);
+  }
+
+  onTruckDimensionsChanged(dimensions: TruckDimensions): void {
+    this.currentTruckDimensions = { ...dimensions };
+    this.session.setTruckDimensions(dimensions);
   }
 
   fetchAvailableLayouts(): void {
