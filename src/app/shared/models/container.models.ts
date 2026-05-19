@@ -17,4 +17,7 @@ export interface Container {
   position?: THREE.Vector3;
   mesh?: THREE.Mesh | THREE.Group;
   originalMaterial?: THREE.MeshStandardMaterial;
+  effectiveWidth?: number;   // actual width used after rotation (same unit as width)
+  effectiveLength?: number;
+  effectiveHeight?: number;
 }

@@ -1,96 +1,396 @@
 <p-toast position="top-right" />
 
-<div class="dispatch-layout">
+<div class="dispatch-page">
 
-  <!-- ── Schedule Form ───────────────────────────────────────── -->
-  <div class="dispatch-card">
-    <div class="card-header">
-      <i class="pi pi-send"></i>
-      <div>
-        <h2>Schedule Dispatch</h2>
-        <p>Select a load plan, set the origin, destination and departure time.</p>
-      </div>
-    </div>
-
-    <div class="card-body">
-      <div class="field">
-        <label class="field-label">Load Plan</label>
-        <p-select
-          [(ngModel)]="selectedLayoutId"
-          [options]="layoutOptions"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Select a saved layout"
-          [style]="{ width: '100%' }"
-          appendTo="body"
-        />
-      </div>
-
-      <div class="field-row">
-        <div class="field">
-          <label class="field-label">From</label>
-          <p-floatlabel variant="on">
-            <input pInputText id="fromLocation" [(ngModel)]="fromLocation" style="width:100%" />
-            <label for="fromLocation">Origin</label>
-          </p-floatlabel>
-        </div>
-
-        <div class="field-arrow"><i class="pi pi-arrow-right"></i></div>
-
-        <div class="field">
-          <label class="field-label">To</label>
-          <p-floatlabel variant="on">
-            <input pInputText id="toLocation" [(ngModel)]="toLocation" style="width:100%" />
-            <label for="toLocation">Destination</label>
-          </p-floatlabel>
-        </div>
-      </div>
-
-      <div class="field">
-        <label class="field-label">Departure Date &amp; Time</label>
-        <p-datepicker
-          [(ngModel)]="dispatchAt"
-          [showTime]="true"
-          [showIcon]="true"
-          [minDate]="minDate"
-          dateFormat="dd/mm/yy"
-          hourFormat="24"
-          [style]="{ width: '100%' }"
-          appendTo="body"
-        />
-      </div>
-
-      @if (formValid && dispatchAt) {
-        <div class="summary">
-          <i class="pi pi-info-circle"></i>
-          <span>
-            Dispatching <strong>{{ selectedLayoutName }}</strong>
-            from <strong>{{ fromLocation }}</strong> to <strong>{{ toLocation }}</strong>
-            on <strong>{{ dispatchAt | date:'dd MMM yyyy, HH:mm' }}</strong>.
-          </span>
-        </div>
-      }
-    </div>
-
-    <div class="card-footer">
-      <p-button
-        label="Schedule Dispatch"
-        icon="pi pi-send"
-        [loading]="submitting"
-        [disabled]="!formValid"
-        (onClick)="submit()"
-      />
+  <!-- Page header -->
+  <div class="page-header">
+    <i class="pi pi-box"></i>
+    <div>
+      <h1>Dispatcher</h1>
+      <p>Configure your truck and containers, then plan in 3D.</p>
     </div>
   </div>
 
-  <!-- ── Dispatches Table ────────────────────────────────────── -->
-  <div class="dispatch-card table-card">
-    <div class="card-header">
-      <i class="pi pi-list"></i>
-      <div>
-        <h2>Dispatch History</h2>
-        <p>Track the status of all scheduled and completed dispatches.</p>
+  <!-- Main grid: Left config + Right plan -->
+  <div class="dispatch-grid">
+
+    <!-- LEFT: Configuration column -->
+    <div class="config-col">
+
+      <!-- Dispatch Info panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <i class="pi pi-send"></i> Dispatch Info
+        </div>
+        <div class="panel-body">
+
+          <div class="field">
+            <label class="field-label">Dispatch / Layout Name</label>
+            <p-floatlabel variant="on">
+              <input pInputText id="dispatchName" [(ngModel)]="dispatchName"
+                     (ngModelChange)="onDispatchInfoChanged()" style="width:100%" />
+              <label for="dispatchName">e.g. Berlin Run — Week 22</label>
+            </p-floatlabel>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label">From</label>
+              <p-floatlabel variant="on">
+                <input pInputText id="fromLocation" [(ngModel)]="fromLocation"
+                       (ngModelChange)="onDispatchInfoChanged()" style="width:100%" />
+                <label for="fromLocation">Origin</label>
+              </p-floatlabel>
+            </div>
+            <div class="field-arrow"><i class="pi pi-arrow-right"></i></div>
+            <div class="field">
+              <label class="field-label">To</label>
+              <p-floatlabel variant="on">
+                <input pInputText id="toLocation" [(ngModel)]="toLocation"
+                       (ngModelChange)="onDispatchInfoChanged()" style="width:100%" />
+                <label for="toLocation">Destination</label>
+              </p-floatlabel>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Departure Date &amp; Time</label>
+            <p-datepicker
+              [(ngModel)]="dispatchAt"
+              (ngModelChange)="onDispatchInfoChanged()"
+              [showTime]="true"
+              [showIcon]="true"
+              [minDate]="minDate"
+              dateFormat="dd/mm/yy"
+              hourFormat="24"
+              [style]="{ width: '100%' }"
+              appendTo="body"
+            />
+          </div>
+
+          <div class="save-layout-row">
+            <p-button
+              label="Save Layout"
+              icon="pi pi-save"
+              severity="secondary"
+              [outlined]="true"
+              [loading]="isSavingLayout"
+              [disabled]="!dispatchName.trim() || isSavingLayout"
+              (onClick)="saveLayout()">
+            </p-button>
+            @if (layoutSaved) {
+              <span class="layout-saved-badge">
+                <i class="pi pi-check-circle"></i> Layout saved
+              </span>
+            }
+          </div>
+
+          <div class="load-layout-row">
+            <div class="field" style="flex:1">
+              <label class="field-label">Load Saved Layout</label>
+              <p-select
+                [(ngModel)]="selectedLayoutToLoad"
+                [options]="availableLayouts"
+                optionLabel="name"
+                optionValue="id"
+                placeholder="Select a layout…"
+                [fluid]="true"
+                appendTo="body"
+                [disabled]="isLoadingLayout || availableLayouts.length === 0">
+              </p-select>
+            </div>
+            <p-button
+              label="Load"
+              icon="pi pi-download"
+              severity="secondary"
+              [outlined]="true"
+              [loading]="isLoadingLayout"
+              [disabled]="!selectedLayoutToLoad || isLoadingLayout"
+              (onClick)="loadSelectedLayout()"
+              >
+            </p-button>
+          </div>
+
+        </div>
       </div>
+
+      <!-- Truck Setup panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <i class="pi pi-truck"></i> Truck Setup
+        </div>
+        <div class="panel-body">
+
+          <div class="field">
+            <label class="field-label">Preset</label>
+            <p-select
+              [(ngModel)]="selectedTruckPreset"
+              [options]="truckPresets"
+              optionLabel="label"
+              optionValue="value"
+              [fluid]="true"
+              appendTo="body"
+              (ngModelChange)="onTruckPresetChange($event)">
+            </p-select>
+          </div>
+
+          <div class="dims-grid">
+            <div class="field">
+              <label class="field-label">Width (mm)</label>
+              <p-inputnumber
+                [(ngModel)]="truckDimensions.width"
+                (ngModelChange)="onTruckDimensionsChanged()"
+                [min]="1" [fluid]="true">
+              </p-inputnumber>
+            </div>
+            <div class="field">
+              <label class="field-label">Length (mm)</label>
+              <p-inputnumber
+                [(ngModel)]="truckDimensions.length"
+                (ngModelChange)="onTruckDimensionsChanged()"
+                [min]="1" [fluid]="true">
+              </p-inputnumber>
+            </div>
+            <div class="field">
+              <label class="field-label">Height (mm)</label>
+              <p-inputnumber
+                [(ngModel)]="truckDimensions.height"
+                (ngModelChange)="onTruckDimensionsChanged()"
+                [min]="1" [fluid]="true">
+              </p-inputnumber>
+            </div>
+            <div class="field">
+              <label class="field-label">Tare Weight (kg)</label>
+              <p-inputnumber
+                [(ngModel)]="truckDimensions.weightKg"
+                (ngModelChange)="onTruckDimensionsChanged()"
+                [min]="0" [fluid]="true">
+              </p-inputnumber>
+            </div>
+            <div class="field">
+              <label class="field-label">Max Payload (kg)</label>
+              <p-inputnumber
+                [(ngModel)]="truckDimensions.maxCapacityKg"
+                (ngModelChange)="onTruckDimensionsChanged()"
+                [min]="0" [fluid]="true">
+              </p-inputnumber>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Add Container panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <i class="pi pi-warehouse"></i> Add Container
+        </div>
+        <div class="panel-body">
+
+          <div class="field">
+            <label class="field-label">Container Type</label>
+            <p-selectbutton
+              [(ngModel)]="newContainer.containerType"
+              [options]="containerTypeOptions"
+              optionLabel="label"
+              optionValue="value"
+              [allowEmpty]="false">
+            </p-selectbutton>
+          </div>
+
+          <div class="dims-grid">
+            <div class="field">
+              <label class="field-label">Width (mm)</label>
+              <p-inputnumber [(ngModel)]="newContainer.width" [min]="1" [fluid]="true" />
+            </div>
+            <div class="field">
+              <label class="field-label">Length (mm)</label>
+              <p-inputnumber [(ngModel)]="newContainer.length" [min]="1" [fluid]="true" />
+            </div>
+            <div class="field">
+              <label class="field-label">Height (mm)</label>
+              <p-inputnumber [(ngModel)]="newContainer.height" [min]="1" [fluid]="true" />
+            </div>
+            <div class="field">
+              <label class="field-label">Container Tare (g)</label>
+              <p-inputnumber [(ngModel)]="newContainer.weight" [min]="0" [fluid]="true" />
+            </div>
+          </div>
+
+          <div class="items-section">
+            <p class="field-label">Items Inside Each Container</p>
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label">Item Count</label>
+                <p-inputnumber [(ngModel)]="newContainer.itemCount" [min]="0" [fluid]="true" />
+              </div>
+              <div class="field">
+                <label class="field-label">Weight per Item (g)</label>
+                <p-inputnumber [(ngModel)]="newContainer.itemWeightG" [min]="0" [fluid]="true" />
+              </div>
+            </div>
+            @if ((newContainer.itemCount ?? 0) > 0 || (newContainer.itemWeightG ?? 0) > 0) {
+              <div class="weight-summary">
+                <div class="weight-row">
+                  <span>Container tare</span>
+                  <span>{{ newContainer.weight }} g</span>
+                </div>
+                <div class="weight-row">
+                  <span>Items ({{ newContainer.itemCount ?? 0 }} × {{ newContainer.itemWeightG ?? 0 }} g)</span>
+                  <span>{{ totalItemWeightG }} g</span>
+                </div>
+                <div class="weight-row weight-total">
+                  <span>Total per container</span>
+                  <span>{{ totalWeightG }} g</span>
+                </div>
+              </div>
+            }
+          </div>
+
+          <div class="amount-row">
+            <div class="field" style="flex:1">
+              <label class="field-label">Amount</label>
+              <p-inputnumber [(ngModel)]="newContainer.amount" [min]="1" [fluid]="true" />
+            </div>
+            <div class="fill-col">
+              <p-button
+                (click)="fillTruck()"
+                label="Fill Truck"
+                icon="pi pi-th-large"
+                size="small"
+                [outlined]="true"
+                [disabled]="maxFitCount === 0">
+              </p-button>
+              <span class="fill-hint">Max: <strong>{{ maxFitCount }}</strong></span>
+            </div>
+            @if (newContainer.containerType === 'box') {
+              <div class="color-col">
+                <label class="field-label">Color</label>
+                <div class="color-row">
+                  <p-colorpicker [(ngModel)]="newContainer.color" format="hex"></p-colorpicker>
+                  <span class="color-hex">#{{ newContainer.color }}</span>
+                </div>
+              </div>
+            }
+          </div>
+
+          <p-button
+            (click)="addContainer()"
+            label="Add to Plan"
+            icon="pi pi-plus"
+            [fluid]="true">
+          </p-button>
+
+        </div>
+      </div>
+
+    </div><!-- /config-col -->
+
+    <!-- RIGHT: Plan summary column -->
+    <div class="plan-col">
+      <div class="panel plan-panel">
+        <div class="panel-header">
+          <i class="pi pi-list"></i> Planned Load
+        </div>
+        <div class="panel-body">
+
+          <!-- Stats chips -->
+          <div class="load-stats">
+            <span class="stat-chip">
+              <i class="pi pi-th-large"></i>
+              {{ pendingContainers.length }} type(s)
+            </span>
+            <span class="stat-chip">
+              <i class="pi pi-box"></i>
+              {{ totalContainersCount }} containers
+            </span>
+            <span class="stat-chip">
+              <i class="pi pi-chart-bar"></i>
+              {{ totalLoadedWeightKg | number:'1.1-1' }} kg
+            </span>
+          </div>
+
+          <!-- Capacity bar -->
+          <div class="capacity-bar-wrap" [class]="capacityBarColor">
+            <div class="capacity-label">
+              <span>Payload Capacity</span>
+              <span class="capacity-pct">{{ capacityUsedPercent | number:'1.0-0' }}%</span>
+            </div>
+            <p-progressbar [value]="capacityUsedPercent" [showValue]="false" class="capacity-bar" />
+          </div>
+
+          <!-- Container list -->
+          @if (pendingContainers.length > 0) {
+            <div class="container-list">
+              @for (c of pendingContainers; track $index) {
+                <div class="container-item">
+                  @if (c.containerType === 'box') {
+                    <span class="color-swatch" [style.background]="'#' + c.color"></span>
+                  }
+                  <span class="container-type-badge">{{ c.containerType }}</span>
+                  <span class="container-dims">{{ c.width }}×{{ c.length }}×{{ c.height }}mm</span>
+                  <span class="container-weight">{{ c.weight }}g</span>
+                  <span class="container-amount">×{{ c.amount }}</span>
+                  <p-button
+                    icon="pi pi-trash"
+                    severity="danger"
+                    [outlined]="true"
+                    size="small"
+                    [text]="true"
+                    class="container-remove"
+                    (click)="removeContainer($index)">
+                  </p-button>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="empty-plan">
+              <i class="pi pi-inbox"></i>
+              <span>No containers added yet</span>
+            </div>
+          }
+
+          <!-- CTA -->
+          <div class="plan-cta">
+            @if (!formValid) {
+              <span class="cta-hint">Add at least one container to plan in 3D</span>
+            }
+            <p-button
+              label="Plan in 3D"
+              icon="pi pi-arrow-right"
+              iconPos="right"
+              [disabled]="!formValid"
+              [fluid]="true"
+              (onClick)="planIn3D()">
+            </p-button>
+
+            <div class="cta-divider"></div>
+
+            @if (!dispatchValid) {
+              <span class="cta-hint">Save a layout and fill in From, To &amp; Departure to create a dispatch</span>
+            }
+            <p-button
+              label="Create Dispatch Plan"
+              icon="pi pi-send"
+              [disabled]="!dispatchValid || isCreatingDispatch"
+              [loading]="isCreatingDispatch"
+              [fluid]="true"
+              severity="secondary"
+              [outlined]="true"
+              (onClick)="createDispatch()">
+            </p-button>
+          </div>
+
+        </div>
+      </div>
+    </div><!-- /plan-col -->
+
+  </div><!-- /dispatch-grid -->
+
+  <!-- ── Full-width Dispatch History  -->
+  <div class="panel history-panel">
+    <div class="panel-header">
+      <i class="pi pi-history"></i> Dispatch History
     </div>
 
     <p-table
@@ -101,7 +401,7 @@
     >
       <ng-template pTemplate="header">
         <tr>
-          <th>Load Plan</th>
+          <th>Dispatch</th>
           <th>From</th>
           <th>To</th>
           <th>Departure</th>
@@ -112,7 +412,7 @@
 
       <ng-template pTemplate="body" let-d>
         <tr>
-          <td>{{ layoutNameById(d.layout_id) }}</td>
+          <td>{{ getLayoutName(d.layout_id) }}</td>
           <td>{{ d.from_location }}</td>
           <td>{{ d.to_location }}</td>
           <td class="mono">{{ d.dispatch_at | date:'dd MMM yy, HH:mm' }}</td>
@@ -157,4 +457,4 @@
     </p-table>
   </div>
 
-</div>
+</div><!-- /dispatch-page -->

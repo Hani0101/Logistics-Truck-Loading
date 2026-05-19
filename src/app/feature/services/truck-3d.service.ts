@@ -12,6 +12,7 @@ export class Truck3DService {
   private truck!: THREE.Group;
   private animationId!: number;
   private controls!: OrbitControls;
+  private needsRender = true;
 
   constructor() {}
 
@@ -33,8 +34,7 @@ export class Truck3DService {
     // Create renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setSize(container.nativeElement.clientWidth, container.nativeElement.clientHeight);
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     container.nativeElement.appendChild(this.renderer.domElement);
 
     // Initialize controls
@@ -44,6 +44,7 @@ export class Truck3DService {
     this.controls.screenSpacePanning = false;
     this.controls.minDistance = 1;
     this.controls.maxDistance = 100;
+    this.controls.addEventListener('change', () => { this.needsRender = true; });
 
     // Add lights
     this.addLights();
@@ -64,9 +65,6 @@ export class Truck3DService {
     // Directional light
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(10, 10, 5);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
     this.scene.add(directionalLight);
   }
 
@@ -121,11 +119,14 @@ export class Truck3DService {
 
   private animate(): void {
     this.animationId = requestAnimationFrame(() => this.animate());
-
-    // Update controls
     this.controls.update();
-
+    if (!this.needsRender) return;
+    this.needsRender = false;
     this.renderer.render(this.scene, this.camera);
+  }
+
+  markDirty(): void {
+    this.needsRender = true;
   }
 
   onWindowResize(container: ElementRef): void {

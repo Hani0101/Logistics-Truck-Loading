@@ -1,5 +1,5 @@
 import {
-  Chromosome, GaContainer, GaOptions, Gene, PlacedGene, TruckBox, Vec3,
+  Chromosome, GaContainer, GaOptions, GaPackingOptions, Gene, PlacedGene, TruckBox, Vec3,
 } from '../ga.models';
 
 export const DEFAULT_POPULATION_SIZE = 60;
@@ -20,6 +20,80 @@ export function timed<T>(name: string, caller: string, fn: () => T): T {
   const ms = (performance.now() - start).toFixed(2);
   // console.log(`[Timing] ${name} call ${count}: ${ms}ms | called from: ${caller}`);
   return result;
+}
+
+// 2D spatial grid (XZ plane) for O(1) average-case collision candidate lookup.
+// Containers are registered into all grid cells they overlap; queries return
+// the (possibly duplicate-containing) list of candidates for a given AABB.
+// Duplicates are harmless: all callers are either max-reducers or early-return
+// searchers, so seeing the same PlacedGene twice has no effect on correctness.
+class SpatialGrid {
+  private cells = new Map<string, PlacedGene[]>();
+  private readonly cellSize: number;
+
+  constructor(cellSize: number) {
+    this.cellSize = cellSize;
+  }
+
+  private lo(v: number): number { return Math.floor(v / this.cellSize); }
+
+  insert(pg: PlacedGene): void {
+    const x0 = this.lo(pg.pos.x - pg.g.width  / 2);
+    const x1 = this.lo(pg.pos.x + pg.g.width  / 2);
+    const z0 = this.lo(pg.pos.z - pg.g.length / 2);
+    const z1 = this.lo(pg.pos.z + pg.g.length / 2);
+    for (let xi = x0; xi <= x1; xi++) {
+      for (let zi = z0; zi <= z1; zi++) {
+        const key = `${xi},${zi}`;
+        let cell = this.cells.get(key);
+        if (!cell) { cell = []; this.cells.set(key, cell); }
+        cell.push(pg);
+      }
+    }
+  }
+
+  query(minX: number, maxX: number, minZ: number, maxZ: number): PlacedGene[] {
+    const x0 = this.lo(minX); const x1 = this.lo(maxX);
+    const z0 = this.lo(minZ); const z1 = this.lo(maxZ);
+    const result: PlacedGene[] = [];
+    for (let xi = x0; xi <= x1; xi++) {
+      for (let zi = z0; zi <= z1; zi++) {
+        const cell = this.cells.get(`${xi},${zi}`);
+        if (cell) for (const pg of cell) result.push(pg);
+      }
+    }
+    return result;
+  }
+}
+
+export interface Orientation { width: number; length: number; height: number; }
+
+export function getOrientations(
+  width: number, length: number, height: number,
+  allowRotation: boolean,
+  axes: ('x' | 'y' | 'z')[],
+): Orientation[] {
+  if (!allowRotation) return [{ width, length, height }];
+
+  const auto = axes.length === 0;
+  const hasY = auto || axes.includes('y');
+  const hasX = auto || axes.includes('x');
+  const hasZ = auto || axes.includes('z');
+
+  const candidates: Orientation[] = [{ width, length, height }];
+  if (hasY) candidates.push({ width: length, length: width,  height });
+  if (hasX) candidates.push({ width,          length: height, height: length });
+  if (hasZ) candidates.push({ width: height,  length,         height: width });
+  if (hasY && hasX) candidates.push({ width: length, length: height, height: width });
+  if (hasY && hasZ) candidates.push({ width: height, length: width,  height: length });
+
+  const seen = new Set<string>();
+  return candidates.filter((o) => {
+    const key = `${o.width},${o.length},${o.height}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function truckBox(wMm: number, lMm: number, hMm: number): TruckBox {
@@ -70,9 +144,13 @@ export function groupedShuffle(genes: Gene[]): Gene[] {
 export function findRestingY(
   cx: number, cz: number, c: Gene,
   placed: PlacedGene[], truckH: number,
+  grid?: SpatialGrid,
 ): number | null {
   let top = 0;
-  for (const { pos, g: other } of placed) {
+  const candidates = grid
+    ? grid.query(cx - c.width / 2, cx + c.width / 2, cz - c.length / 2, cz + c.length / 2)
+    : placed;
+  for (const { pos, g: other } of candidates) {
     const overlapX = Math.abs(cx - pos.x) < (c.width  + other.width)  / 2 - 1e-6;
     const overlapZ = Math.abs(cz - pos.z) < (c.length + other.length) / 2 - 1e-6;
     if (overlapX && overlapZ) {
@@ -85,12 +163,18 @@ export function findRestingY(
 
 // Returns true when this container would be directly supported by a same-group container.
 // Used to prefer vertical compaction within a group when mixed stacking is disabled.
-export function isStackingOnSameGroup(cx: number, cy: number, cz: number, c: Gene, placed: PlacedGene[]): boolean {
+export function isStackingOnSameGroup(
+  cx: number, cy: number, cz: number, c: Gene,
+  placed: PlacedGene[], grid?: SpatialGrid,
+): boolean {
   if (!c.groupId) return false;
   const bottom = cy - c.height / 2;
   if (bottom < 1e-6) return false;
 
-  for (const { pos, g: other } of placed) {
+  const candidates = grid
+    ? grid.query(cx - c.width / 2, cx + c.width / 2, cz - c.length / 2, cz + c.length / 2)
+    : placed;
+  for (const { pos, g: other } of candidates) {
     if (other.groupId !== c.groupId) continue;
     const overlapX = Math.abs(cx - pos.x) < (c.width  + other.width)  / 2 - 1e-6;
     const overlapZ = Math.abs(cz - pos.z) < (c.length + other.length) / 2 - 1e-6;
@@ -104,12 +188,15 @@ export function isStackingOnSameGroup(cx: number, cy: number, cz: number, c: Gen
 // Checks if the direct support surface under this container belongs to a different group
 export function restsOnDifferentGroup(
   cx: number, cy: number, cz: number, c: Gene,
-  placed: PlacedGene[],
+  placed: PlacedGene[], grid?: SpatialGrid,
 ): boolean {
   const bottom = cy - c.height / 2;
   if (bottom < 1e-6) return false;
 
-  for (const { pos, g: other } of placed) {
+  const candidates = grid
+    ? grid.query(cx - c.width / 2, cx + c.width / 2, cz - c.length / 2, cz + c.length / 2)
+    : placed;
+  for (const { pos, g: other } of candidates) {
     const overlapX = Math.abs(cx - pos.x) < (c.width  + other.width)  / 2 - 1e-6;
     const overlapZ = Math.abs(cz - pos.z) < (c.length + other.length) / 2 - 1e-6;
     if (!overlapX || !overlapZ) continue;
@@ -122,8 +209,11 @@ export function restsOnDifferentGroup(
   return false;
 }
 
-export function overlapsAny(pos: Vec3, c: Gene, placed: PlacedGene[]): boolean {
-  for (const { pos: o, g: other } of placed) {
+export function overlapsAny(pos: Vec3, c: Gene, placed: PlacedGene[], grid?: SpatialGrid): boolean {
+  const candidates = grid
+    ? grid.query(pos.x - c.width / 2, pos.x + c.width / 2, pos.z - c.length / 2, pos.z + c.length / 2)
+    : placed;
+  for (const { pos: o, g: other } of candidates) {
     const ox = Math.abs(pos.x - o.x) < (c.width  + other.width)  / 2 - 1e-6;
     const oy = Math.abs(pos.y - o.y) < (c.height + other.height) / 2 - 1e-6;
     const oz = Math.abs(pos.z - o.z) < (c.length + other.length) / 2 - 1e-6;
@@ -134,7 +224,7 @@ export function overlapsAny(pos: Vec3, c: Gene, placed: PlacedGene[]): boolean {
 
 export function findFallbackPosition(
   c: Gene, placed: PlacedGene[], truck: TruckBox,
-  allowMixedStacking: boolean,
+  allowMixedStacking: boolean, grid?: SpatialGrid,
 ): Vec3 {
   // When mixed stacking is disabled, try stacking on an existing same-group
   // container first, this keeps the group compact and frees floor space for
@@ -142,10 +232,10 @@ export function findFallbackPosition(
   if (!allowMixedStacking && c.groupId) {
     for (const { pos, g: other } of placed) {
       if (other.groupId !== c.groupId) continue;
-      const cy = findRestingY(pos.x, pos.z, c, placed, truck.h);
+      const cy = findRestingY(pos.x, pos.z, c, placed, truck.h, grid);
       if (cy === null) continue;
       const candidate = { x: pos.x, y: cy, z: pos.z };
-      if (!overlapsAny(candidate, c, placed)) return candidate;
+      if (!overlapsAny(candidate, c, placed, grid)) return candidate;
     }
   }
 
@@ -154,12 +244,12 @@ export function findFallbackPosition(
 
   for (let z = -truck.l / 2 + c.length / 2; z <= truck.l / 2 - c.length / 2 + 1e-6; z += stepZ) {
     for (let x = -truck.w / 2 + c.width / 2; x <= truck.w / 2 - c.width / 2 + 1e-6; x += stepX) {
-      const cy = findRestingY(x, z, c, placed, truck.h);
+      const cy = findRestingY(x, z, c, placed, truck.h, grid);
       if (cy === null) continue;
 
       const candidate = { x, y: cy, z };
-      if (overlapsAny(candidate, c, placed)) continue;
-      if (!allowMixedStacking && restsOnDifferentGroup(x, cy, z, c, placed)) continue;
+      if (overlapsAny(candidate, c, placed, grid)) continue;
+      if (!allowMixedStacking && restsOnDifferentGroup(x, cy, z, c, placed, grid)) continue;
 
       return candidate;
     }
@@ -172,54 +262,76 @@ export function findFallbackPosition(
 // place containers functions uses the logic of anchoring each x and z axis to
 // determine the start of the new introduced container
 // ps: initially it starts from bottom left corner
-export function placeContainers(ordered: Gene[], truck: TruckBox, allowMixedStacking: boolean): Vec3[] {
+export function placeContainers(
+  ordered: Gene[], truck: TruckBox, allowMixedStacking: boolean,
+  packingOptions?: Pick<GaPackingOptions, 'allowRotation' | 'rotationAxes'>,
+): { positions: Vec3[]; effectiveDims: Orientation[] } {
   const placed: PlacedGene[] = [];
+  const grid = new SpatialGrid(1.0); // 1 m cells — sized for typical truck/container scale
   const anchorsX = new Set<number>([-truck.w / 2]);
   const anchorsZ = new Set<number>([-truck.l / 2]);
+  const effectiveDims: Orientation[] = [];
+
+  const allowRotation = packingOptions?.allowRotation ?? false;
+  const rotationAxes  = packingOptions?.rotationAxes  ?? [];
+
   for (const c of ordered) {
+    const orientations = getOrientations(c.width, c.length, c.height, allowRotation, rotationAxes);
+
     let bestPos: Vec3 | null = null;
     let bestScore = Infinity;
+    let bestOrient: Orientation = { width: c.width, length: c.length, height: c.height };
 
-    for (const ax of [...anchorsX].sort((a, b) => a - b)) {
-      for (const az of [...anchorsZ].sort((a, b) => a - b)) {
-        const cx = ax + c.width  / 2; // trying every combination of x and z anchors
-        const cz = az + c.length / 2;
+    // Sort anchor arrays once per container instead of once per orientation
+    const sortedX = [...anchorsX].sort((a, b) => a - b);
+    const sortedZ = [...anchorsZ].sort((a, b) => a - b);
 
-        if (cx + c.width  / 2 > truck.w / 2 + 1e-6) continue; // avoid rejecting valid positions due to decimals
-        if (cz + c.length / 2 > truck.l / 2 + 1e-6) continue;
+    for (const orient of orientations) {
+      const gc: Gene = { ...c, width: orient.width, length: orient.length, height: orient.height };
 
-        const cy = findRestingY(cx, cz, c, placed, truck.h);
-        if (cy === null) continue;
+      for (const ax of sortedX) {
+        for (const az of sortedZ) {
+          const cx = ax + gc.width  / 2;
+          const cz = az + gc.length / 2;
 
-        const candidate = { x: cx, y: cy, z: cz };
-        if (overlapsAny(candidate, c, placed)) continue;
+          if (cx + gc.width  / 2 > truck.w / 2 + 1e-6) continue;
+          if (cz + gc.length / 2 > truck.l / 2 + 1e-6) continue;
 
-        if (!allowMixedStacking && restsOnDifferentGroup(cx, cy, cz, c, placed)) {
-          continue;
-        }
+          const cy = findRestingY(cx, cz, gc, placed, truck.h, grid);
+          if (cy === null) continue;
 
-        // When mixed stacking is off, strongly prefer stacking within the same
-        // group, this compacts each group vertically and frees floor space for
-        // other groups instead of spreading everything across the floor.
-        const sameGroupStack = !allowMixedStacking && isStackingOnSameGroup(cx, cy, cz, c, placed);
-        const yScore = sameGroupStack ? cy * 100 : cy * 1_000_000;
-        const score = yScore + (cz + truck.l / 2) * 1000 + (cx + truck.w / 2);
-        if (score < bestScore) {
-          bestScore = score;
-          bestPos   = candidate;
+          const candidate = { x: cx, y: cy, z: cz };
+          if (overlapsAny(candidate, gc, placed, grid)) continue;
+
+          if (!allowMixedStacking && restsOnDifferentGroup(cx, cy, cz, gc, placed, grid)) continue;
+
+          const sameGroupStack = !allowMixedStacking && isStackingOnSameGroup(cx, cy, cz, gc, placed, grid);
+          const yScore = sameGroupStack ? cy * 100 : cy * 1_000_000;
+          const score = yScore + (cz + truck.l / 2) * 1000 + (cx + truck.w / 2);
+          if (score < bestScore) {
+            bestScore = score;
+            bestPos   = candidate;
+            bestOrient = orient;
+          }
         }
       }
     }
 
+    const chosenGene: Gene = { ...c, width: bestOrient.width, length: bestOrient.length, height: bestOrient.height };
+
     if (!bestPos) {
-      bestPos = findFallbackPosition(c, placed, truck, allowMixedStacking);
+      bestPos = findFallbackPosition(chosenGene, placed, truck, allowMixedStacking, grid);
     }
-    placed.push({ pos: bestPos, g: c });
-    anchorsX.add(bestPos.x + c.width  / 2);
-    anchorsZ.add(bestPos.z + c.length / 2);
+
+    const pg: PlacedGene = { pos: bestPos, g: chosenGene };
+    placed.push(pg);
+    grid.insert(pg);
+    anchorsX.add(bestPos.x + chosenGene.width  / 2);
+    anchorsZ.add(bestPos.z + chosenGene.length / 2);
+    effectiveDims.push(bestOrient);
   }
-  console.log("placed", placed);
-  return placed.map((p) => p.pos);
+
+  return { positions: placed.map((p) => p.pos), effectiveDims };
 }
 
 export function calcFitness(chrom: Chromosome, truck: TruckBox): number {
@@ -235,18 +347,23 @@ export function calcFitness(chrom: Chromosome, truck: TruckBox): number {
   return (usedVol / truckVol) * 500 + packScore * 0.5 + chrom.genes.length * 10;
 }
 
-export function decode(genes: Gene[], truck: TruckBox, allowMixedStacking: boolean): Chromosome {
-  const positions = timed('placeContainers', 'decode', () => placeContainers(genes, truck, allowMixedStacking));
-  const chrom: Chromosome = { genes, positions, fitness: 0 };
+export function decode(
+  genes: Gene[], truck: TruckBox, allowMixedStacking: boolean,
+  packingOptions?: Pick<GaPackingOptions, 'allowRotation' | 'rotationAxes'>,
+): Chromosome {
+  const { positions, effectiveDims } = timed('placeContainers', 'decode', () =>
+    placeContainers(genes, truck, allowMixedStacking, packingOptions));
+  const chrom: Chromosome = { genes, positions, fitness: 0, effectiveDims };
   chrom.fitness = timed('calcFitness', 'decode', () => calcFitness(chrom, truck));
   return chrom;
 }
 
 export function cloneChromosome(c: Chromosome): Chromosome {
   return {
-    genes:     c.genes.map((g) => ({ ...g })),
-    positions: c.positions.map((p) => ({ ...p })),
-    fitness:   c.fitness,
+    genes:        c.genes.map((g) => ({ ...g })),
+    positions:    c.positions.map((p) => ({ ...p })),
+    fitness:      c.fitness,
+    effectiveDims: c.effectiveDims?.map((d) => ({ ...d })),
   };
 }
 
@@ -265,15 +382,28 @@ export function ox(primary: Gene[], secondary: Gene[]): Gene[] {
 export function mutate(
   chrom: Chromosome, truck: TruckBox, allowMixedStacking: boolean,
   groupSameType: boolean, mutationRate = DEFAULT_MUTATION_RATE,
+  packingOptions?: Pick<GaPackingOptions, 'allowRotation' | 'rotationAxes'>,
 ): void {
   let mutated = false;
+
+  // Build group index once O(n) to avoid O(n²) filter inside the mutation loop
+  const groupIndex = groupSameType ? new Map<string, number[]>() : null;
+  if (groupIndex) {
+    chrom.genes.forEach((g, idx) => {
+      const key = g.groupId ?? '';
+      let arr = groupIndex.get(key);
+      if (!arr) { arr = []; groupIndex.set(key, arr); }
+      arr.push(idx);
+    });
+  }
+
   for (let i = 0; i < chrom.genes.length; i++) {
     if (Math.random() < mutationRate) {
       let j: number;
-      if (groupSameType) {
-        const sameGroup = chrom.genes
-          .map((_, idx) => idx)
-          .filter((idx) => chrom.genes[idx].groupId === chrom.genes[i].groupId && idx !== i);
+      if (groupSameType && groupIndex) {
+        const key = chrom.genes[i].groupId ?? '';
+        const pool = groupIndex.get(key);
+        const sameGroup = pool ? pool.filter((idx) => idx !== i) : [];
         j = sameGroup.length > 0 && Math.random() < 0.7
           ? sameGroup[Math.floor(Math.random() * sameGroup.length)]
           : Math.floor(Math.random() * chrom.genes.length);
@@ -285,8 +415,11 @@ export function mutate(
     }
   }
   if (mutated) {
-    chrom.positions = timed('placeContainers', 'mutate', () => placeContainers(chrom.genes, truck, allowMixedStacking));
-    chrom.fitness   = timed('calcFitness', 'mutate', () => calcFitness(chrom, truck));
+    const { positions, effectiveDims } = timed('placeContainers', 'mutate', () =>
+      placeContainers(chrom.genes, truck, allowMixedStacking, packingOptions));
+    chrom.positions    = positions;
+    chrom.effectiveDims = effectiveDims;
+    chrom.fitness      = timed('calcFitness', 'mutate', () => calcFitness(chrom, truck));
   }
 }
 
@@ -343,5 +476,6 @@ export function extractPositions(chrom: Chromosome, tagToId: Map<number, string>
   return chrom.genes.map((gene, i) => ({
     id:       tagToId.get(gene.tag)!,
     position: chrom.positions[i],
+    effectiveDimensions: chrom.effectiveDims?.[i],
   }));
 }
