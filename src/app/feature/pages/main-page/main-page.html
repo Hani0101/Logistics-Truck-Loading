@@ -3,25 +3,51 @@
 <div class="layout">
 
   <aside class="sidebar">
-    <div class="sidebar-header">
-      <i class="pi pi-box"></i>
-      <div>
-        <p class="app-name">Truck Loading</p>
-        <p class="app-sub">3D Truck Optimizer</p>
-      </div>
-    </div>
-
-    <div class="sidebar-body">
-      <app-drawer
-        (truckDimensionsChanged)="onTruckDimensionsChanged($event)"
-        (containerAdded)="onContainerAdded($event)"
-        (layoutSaved)="onLayoutSaved($event)"
-        (layoutLoadRequested)="onLayoutLoadRequested($event)"
-        (layoutDeleted)="onLayoutDeleted()">
-      </app-drawer>
+    <div class="sidebar-back">
+      <a (click)="goToPlanner()" class="back-link">
+        <i class="pi pi-arrow-left"></i> Back to Planner
+      </a>
+      @if (session.hasContainers) {
+        <span class="container-count-badge">containers loaded</span>
+      }
     </div>
 
     <div class="sidebar-footer">
+
+      <div class="load-layout-section">
+        <p class="section-label">Load Layout</p>
+        <p-select
+          [(ngModel)]="selectedLayoutToLoad"
+          [options]="availableLayouts"
+          optionLabel="name"
+          optionValue="id"
+          placeholder="Select layout…"
+          [fluid]="true"
+          [disabled]="isLoadingLayout || availableLayouts.length === 0">
+        </p-select>
+        <div class="load-layout-actions">
+          <p-button
+            label="Load"
+            icon="pi pi-download"
+            [fluid]="true"
+            severity="secondary"
+            [outlined]="true"
+            [loading]="isLoadingLayout"
+            [disabled]="!selectedLayoutToLoad || isLoadingLayout"
+            (onClick)="loadSelectedLayout()">
+          </p-button>
+          <p-button
+            icon="pi pi-refresh"
+            severity="secondary"
+            [outlined]="true"
+            [disabled]="isLoadingLayout"
+            pTooltip="Refresh layouts"
+            (onClick)="fetchAvailableLayouts()">
+          </p-button>
+        </div>
+      </div>
+
+      <div class="section-divider"></div>
 
       <p-button
         (click)="saveCurrentScene()"
@@ -31,6 +57,22 @@
         severity="secondary"
         [outlined]="true"
         [loading]="isSavingContainers">
+      </p-button>
+
+      <div class="section-divider"></div>
+
+      @if (!dispatchValid) {
+        <p class="section-hint">Go back to the planner, save a layout and fill in From, To &amp; Departure to enable dispatch.</p>
+      }
+      <p-button
+        (click)="createDispatch()"
+        label="Create Dispatch Plan"
+        icon="pi pi-send"
+        [fluid]="true"
+        severity="secondary"
+        [outlined]="true"
+        [loading]="isCreatingDispatch"
+        [disabled]="!dispatchValid || isCreatingDispatch">
       </p-button>
 
       <div class="section-divider"></div>
@@ -266,11 +308,19 @@
             <i class="pi pi-link"></i> layout synced
           </span>
         }
+        <p-button
+          icon="pi pi-chart-bar"
+          [severity]="showWeightPanel ? 'primary' : 'secondary'"
+          [outlined]="true"
+          size="small"
+          pTooltip="Toggle weight distribution"
+          (click)="toggleWeightPanel()">
+        </p-button>
         <span class="hint">Scroll to zoom · Drag to orbit</span>
       </div>
     </div>
 
-    @if (hasContainers) {
+    @if (showWeightPanel && hasContainers) {
       <div class="weight-panel" [class.over-capacity]="isOverCapacity">
         <div class="weight-stat">
           <span class="weight-stat-label">Truck Tare</span>

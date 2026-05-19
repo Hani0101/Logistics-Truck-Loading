@@ -113,7 +113,7 @@ export class LoadingSessionService implements OnDestroy {
     this.syncSaveAndRegisterIds(layoutId);
   }
 
-  onLayoutLoadRequested(layoutId: string): void {
+  onLayoutLoadRequested(layoutId: string, onComplete?: () => void): void {
     this.layoutService.getLayout(layoutId).subscribe({
       next: (layout) => {
         this.currentLayoutId$.next(layout.id);
@@ -121,10 +121,14 @@ export class LoadingSessionService implements OnDestroy {
         this.messageService.add({
           severity: 'success', summary: 'Layout loaded', detail: layout.name, life: 2500,
         });
+        onComplete?.();
       },
-      error: () => this.messageService.add({
-        severity: 'error', summary: 'Load failed', detail: 'Could not reach the API.',
-      }),
+      error: () => {
+        this.messageService.add({
+          severity: 'error', summary: 'Load failed', detail: 'Could not reach the API.',
+        });
+        onComplete?.();
+      },
     });
   }
 
@@ -151,15 +155,6 @@ export class LoadingSessionService implements OnDestroy {
     packingOptions: PackingOptions = DEFAULT_PACKING_OPTIONS,
     gaOptions?: GaOptions,
   ): void {
-    const layoutId = this.currentLayoutId$.value;
-    if (!layoutId) {
-      this.messageService.add({
-        severity: 'warn', summary: 'Save first',
-        detail: 'Save the layout before optimising.', life: 3500,
-      });
-      return;
-    }
-
     if (!this.optimizationService.isSupported) {
       this.messageService.add({
         severity: 'error', summary: 'Web Workers not supported',
@@ -193,11 +188,14 @@ export class LoadingSessionService implements OnDestroy {
       );
     };
 
-    const containers = this.container3DService.getContainers();
-    const idsNotSynced = containers.some((c) => c.id?.startsWith('container-'));
-
-    if (idsNotSynced) {
-      this.syncSaveAndRegisterIds(layoutId, launchWorker);
+    const layoutId = this.currentLayoutId$.value;
+    if (layoutId) {
+      const idsNotSynced = this.container3DService.getContainers().some((c) => c.id?.startsWith('container-'));
+      if (idsNotSynced) {
+        this.syncSaveAndRegisterIds(layoutId, launchWorker);
+      } else {
+        launchWorker();
+      }
     } else {
       launchWorker();
     }
